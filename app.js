@@ -275,7 +275,7 @@ function renderTop(){
     R.topListings.map(r => `<tr><td>${esc(r.name)}<span class="minor">Entire home · ${r.beds} bedrooms · rated ${r.rating.toFixed(2)}</span></td><td class="num">${money(r.revenue, true)}</td><td class="num">${r.occ.toFixed(1)}%</td><td class="num">${money(r.adr)}</td></tr>`).join('') + '</tbody>';
   $('#tbl-hosts').innerHTML = '<thead><tr><th>Host</th><th class="num">Listings</th><th class="num">Gross revenue</th><th class="num">Per listing</th><th class="num">Rating</th></tr></thead><tbody>' +
     R.topHosts.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${r.listings}</td><td class="num">${money(r.revenue, true)}</td><td class="num">${money(r.per, true)}</td><td class="num">${r.rating.toFixed(2)}</td></tr>`).join('') + '</tbody>';
-  $('#atlas-note').innerHTML = `This page carries market-level figures and Rabat's six top listings. To browse every listing on a map, open <a href="${D.meta.links.airroiAtlas}" target="_blank" rel="noopener">AirROI's Market Atlas for Rabat</a>; the areas AirROI flags for guest appeal are ${R.areas.slice(0, -1).join(', ')} and ${R.areas[R.areas.length - 1]}.`;
+  $('#atlas-note').textContent = `These are the top earners as measured by AirROI. The map at the top of the page has ${LS ? nf0.format(LS.items.length) : 'the'} Rabat listings, each with its own estimated revenue and occupancy.`;
 }
 
 /* ---------- Morocco map + table ---------- */
@@ -382,7 +382,7 @@ function focusMarket(name){
   showMarker(map, mk, BUNDLED && (!mkt || mkt.km == null) ? 8 : 10);
 }
 
-/* ---------- Rabat listings (optional: listings.js) ---------- */
+/* ---------- Explorer: Rabat listings on the map (optional: listings.js) ---------- */
 // listings.js carries text written by strangers (anyone can name a listing anything), so none of it is
 // trusted: every field is forced to its expected type here, and strings are escaped again where shown.
 function cleanListings(raw){
@@ -390,7 +390,7 @@ function cleanListings(raw){
   const num = v => typeof v === 'number' && isFinite(v) ? v : null;
   const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : null;
   const day = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
-  const NUMS = ['lat', 'lng', 'bedrooms', 'beds', 'baths', 'guests', 'rating', 'reviews', 'adr', 'rev', 'revpar', 'occ', 'availDays', 'bookedDays', 'calNights', 'calTaken'];
+  const NUMS = ['lat', 'lng', 'bedrooms', 'beds', 'baths', 'guests', 'rating', 'reviews', 'adr', 'rev', 'pot', 'occ', 'since', 'availDays', 'bookedDays', 'calNights', 'calTaken', 'calOcc'];
   const seen = Object.create(null), items = [];
   raw.items.forEach(l => {
     if (!l || typeof l !== 'object') return;
@@ -399,7 +399,7 @@ function cleanListings(raw){
     seen[id] = 1;
     const o = { id: id, name: str(l.name, 200), type: str(l.type, 60), room: str(l.room, 30), priceDate: day(l.priceDate),
       cal: typeof l.cal === 'string' && /^[acx]{1,400}$/.test(l.cal) ? l.cal : null,
-      isNew: l.isNew === true, fav: l.fav === true, superhost: l.superhost === true, exact: l.exact === false ? false : undefined };
+      isNew: l.isNew === true, fav: l.fav === true, superhost: l.superhost === true, priceOdd: l.priceOdd === true, exact: l.exact === false ? false : undefined };
     NUMS.forEach(k => { o[k] = num(l[k]); });
     items.push(o);
   });
@@ -407,17 +407,18 @@ function cleanListings(raw){
   const m = raw.meta && typeof raw.meta === 'object' ? raw.meta : {};
   return { items: items, meta: { source: m.source === 'airbnb' ? 'airbnb' : 'airroi', pulledAt: day(m.pulledAt),
     currency: ['GBP', 'MAD', 'EUR', 'USD'].indexOf(m.currency) >= 0 ? m.currency : 'MAD',
-    totalInMarket: num(m.totalInMarket), sort: str(m.sort, 40), calFrom: day(m.calFrom), calTo: day(m.calTo), calCount: num(m.calCount) } };
+    totalInMarket: num(m.totalInMarket), sort: str(m.sort, 40), calFrom: day(m.calFrom), calTo: day(m.calTo), calCount: num(m.calCount),
+    openNights: num(m.openNights), topQuarterOcc: num(m.topQuarterOcc) } };
 }
 const LS = cleanListings(window.STR_LISTINGS);
-// Two possible sources. 'airbnb': read from Airbnb's public map search, so price, rating and reviews
-// are observed and revenue is only a rough guide. Otherwise AirROI's API, with measured revenue and occupancy.
+// Two possible sources. 'airbnb': read from Airbnb's public map search; price, rating and reviews are as
+// shown there, and occupancy and revenue are estimates. Otherwise AirROI's API, with its own measured figures.
 const AB = !!LS && LS.meta.source === 'airbnb';
-const PK = AB ? 'adr' : 'rev'; // the money figure pins are coloured by
-const HAS_CAL = AB && LS.items.some(l => l.occ != null); // calendars read for some listings
 const GREY = '#c3c2b7';
-const lstate = { beds: 'any', minRev: 0, color: 'price', sort: { key: AB ? 'reviews' : 'rev', dir: -1 }, show: 25 };
-let lmap = null, lLayer = null, lq = null; const lmarkers = Object.create(null);
+const lstate = { beds: 'any', show: 'all', sort: 'rev', page: 0, per: 12, hold: false };
+let lmap = null, dotLayer = null, pinLayer = null, pins = Object.create(null);
+const lmarkers = Object.create(null), byId = Object.create(null), saved = Object.create(null);
+try { (JSON.parse(localStorage.getItem('str-saved') || '[]') || []).forEach(id => { if (typeof id === 'string') saved[id] = 1; }); } catch (e) {}
 // Dates in the file are plain calendar days; read them as local midnight so they do not shift by time zone.
 const lDay = d => d ? new Date(d + 'T00:00:00') : new Date(NaN);
 const lAge = () => Math.floor((Date.now() - lDay(LS.meta.pulledAt).getTime()) / 864e5);
@@ -427,117 +428,161 @@ const lWhen = () => LS.meta.pulledAt ? lDay(LS.meta.pulledAt).toLocaleDateString
 const lMAD = v => { if (v == null) return null; const c = LS.meta.currency; return c && c !== 'MAD' && state.rates[c] ? v / state.rates[c] : v; };
 const lMoney = (v, c) => v == null ? '–' : money(lMAD(v), c);
 const median = a => { const s = a.filter(v => v != null).sort((x, y) => x - y), n = s.length; return n ? (n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2) : null; };
+const shortDate = d => d ? lDay(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
 const isRoom = l => l.room === 'private_room' || l.room === 'shared_room';
 const bedMatch = l => lstate.beds === 'any' || (lstate.beds === 'room' ? isRoom(l) : !isRoom(l) && (lstate.beds === 'unknown' ? l.bedrooms == null : lstate.beds === '5' ? l.bedrooms >= 5 : l.bedrooms === +lstate.beds));
+const showMatch = l => lstate.show === 'all' || (lstate.show === 'est' ? l.occ != null : lstate.show === 'r10' ? (l.reviews || 0) >= 10 : !!saved[l.id]);
 function bedChips(){
-  const has = f => LS.items.some(f), chips = [['any', 'Any size']];
-  [[0, 'Studio'], [1, '1 bed'], [2, '2'], [3, '3'], [4, '4']].forEach(c => { if (has(l => !isRoom(l) && l.bedrooms === c[0])) chips.push([String(c[0]), c[1]]); });
+  const has = f => LS.items.some(f), chips = [['any', 'Any']];
+  [[0, 'Studio'], [1, '1'], [2, '2'], [3, '3'], [4, '4']].forEach(c => { if (has(l => !isRoom(l) && l.bedrooms === c[0])) chips.push([String(c[0]), c[1]]); });
   if (has(l => !isRoom(l) && l.bedrooms >= 5)) chips.push(['5', '5+']);
   if (has(isRoom)) chips.push(['room', 'Rooms']);
-  if (has(l => !isRoom(l) && l.bedrooms == null)) chips.push(['unknown', 'Size not stated']);
+  if (has(l => !isRoom(l) && l.bedrooms == null)) chips.push(['unknown', 'Not stated']);
   return chips;
 }
-const lBin = l => { const v = l[PK] || 0; return v < lq[0] ? 0 : v < lq[1] ? 1 : v < lq[2] ? 2 : 3; };
-const shortDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
-const lDesc = l => [l.type || l.room, isRoom(l) ? null : l.bedrooms === 0 ? 'studio' : l.bedrooms != null ? l.bedrooms + ' bed' : null, l.guests ? 'sleeps ' + l.guests : null,
-  l.rating ? 'rated ' + (+l.rating).toFixed(2) + (l.reviews ? ' (' + nf0.format(l.reviews) + ')' : '') : l.isNew ? 'new' : null].filter(Boolean).join(' · ');
+const occColor = l => l.occ == null ? GREY : BINCOL[l.occ < 25 ? 0 : l.occ < 50 ? 1 : l.occ < 75 ? 2 : 3];
+const kind = l => (isRoom(l) ? 'Private room' : 'Entire ' + (l.type ? l.type.toLowerCase() : 'home')) + (isRoom(l) || l.bedrooms == null ? '' : l.bedrooms === 0 ? ' · studio' : ' · ' + l.bedrooms + ' bed');
+const stars = l => l.rating ? '★ ' + (+l.rating).toFixed(2) + ' (' + nf0.format(l.reviews || 0) + ')' : l.isNew ? 'New' : 'No rating yet';
+const EST = AB ? ' <abbr title="An estimate, not a measurement. See the note under the list.">est.</abbr>' : '';
+// The five figures a card and a popup show, already formatted.
+function figures(l){
+  return {
+    pot: l.pot != null ? lMoney(l.pot) : '–',
+    open: AB ? (l.calNights != null && l.calTaken != null ? (l.calNights - l.calTaken) + ' of ' + l.calNights : '–') : (l.availDays != null ? nf0.format(l.availDays) : '–'),
+    rev: l.rev != null ? lMoney(l.rev) : '–',
+    occ: l.occ != null ? Math.round(l.occ) + '%' : '–',
+    adr: lMoney(l.adr)
+  };
+}
+const OPEN_LABEL = AB ? 'Nights open, next 6 weeks' : 'Days available';
+const airbnbLink = (l, cls) => /^\d+$/.test(l.id) ? `<a${cls ? ' class="' + cls + '"' : ''} href="https://www.airbnb.co.uk/rooms/${l.id}" target="_blank" rel="noopener">View on Airbnb</a>` : '';
+function cardHtml(l){
+  const f = figures(l);
+  return `<article class="lcard" data-card="${esc(l.id)}" tabindex="0">` +
+    `<header><span class="lc-kind">${esc(kind(l))}</span><span class="lc-stars">${esc(stars(l))}</span></header>` +
+    `<p class="lc-name">${esc(l.name || 'Listing')}</p>` +
+    `<div class="lc-row two"><div class="m"><b>${f.pot}</b><span>Revenue potential</span></div><div class="m"><b>${f.open}</b><span>${OPEN_LABEL}</span></div></div>` +
+    `<div class="lc-row three"><div class="m key"><b>${f.rev}</b><span>Revenue${EST}</span></div><div class="m key"><b>${f.occ}</b><span>Occupancy rate${EST}</span></div><div class="m key"><b>${f.adr}</b><span>Daily rate</span></div></div>` +
+    (AB && l.occ == null ? '<p class="lc-why">Too few reviews to estimate revenue or occupancy.</p>' : l.priceOdd ? '<p class="lc-why">The rate is far above others of its size, so no revenue is estimated.</p>' : '') +
+    `<div class="lc-actions">${airbnbLink(l, 'btn')}<button type="button" class="btn ghost" data-save="${esc(l.id)}" aria-pressed="${!!saved[l.id]}">${saved[l.id] ? '♥ Saved' : '♡ Save'}</button></div></article>`;
+}
 function lPopup(l){
-  const rows = AB
-    ? [['Nightly price', lMoney(l.adr) + (l.priceDate ? ' <span style="color:#52514e">on ' + shortDate(l.priceDate) + '</span>' : '')],
-       ['Guest rating', l.rating ? (+l.rating).toFixed(2) + ' from ' + nf0.format(l.reviews) + ' reviews' : l.isNew ? 'New listing' : 'Not yet rated'],
-       ['Beds · baths', [l.beds != null ? l.beds + (l.beds === 1 ? ' bed' : ' beds') : null, l.baths != null ? l.baths + (l.baths === 1 ? ' bath' : ' baths') : null].filter(Boolean).join(' · ') || '–'],
-       ['Rough annual revenue', l.rev != null ? 'about ' + lMoney(l.rev, true) : '–']]
-      .concat(HAS_CAL ? [['Nights taken', l.occ != null && l.calTaken != null && l.calNights != null ? `${l.calTaken} of ${l.calNights} (${l.occ}%)` : 'calendar not read']] : [])
-    : [['Annual revenue', lMoney(l.rev)], ['Occupancy', l.occ != null ? l.occ + '%' : '–'], ['Nightly rate', lMoney(l.adr)], ['RevPAR', lMoney(l.revpar)],
-       ['Days available', l.availDays != null ? l.availDays : '–'], ['Days booked', l.bookedDays != null ? l.bookedDays : '–']];
+  const f = figures(l), since = l.since ? ' · listed ' + Math.floor(l.since) : '';
+  const rows = [['Revenue' + (AB ? ' (est.)' : ''), f.rev], ['Occupancy rate' + (AB ? ' (est.)' : ''), f.occ],
+    ['Daily rate', f.adr + (l.priceDate ? ' <span style="color:#52514e">on ' + shortDate(l.priceDate) + '</span>' : '')], ['Revenue potential', f.pot], [OPEN_LABEL, f.open]];
   const tags = [l.fav ? 'Guest favourite' : null, l.superhost ? 'Superhost' : null, l.exact === false ? 'approximate location' : null].filter(Boolean).join(' · ');
-  return `<b>${esc(l.name || 'Listing')}</b><div class="r">${esc(lDesc(l))}${tags ? ' · ' + tags : ''}</div><table>` +
+  return `<b>${esc(l.name || 'Listing')}</b><div class="r">${esc(kind(l))} · ${esc(stars(l))}${since}${tags ? ' · ' + tags : ''}</div><table>` +
     rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('') + '</table>' +
-    (l.cal ? `<div class="calstrip" role="img" aria-label="Nights taken and free, ${shortDate(LS.meta.calFrom)} to ${shortDate(LS.meta.calTo)}">${l.cal.split('').map(ch => `<i class="${ch === 'a' ? '' : 't'}"></i>`).join('')}</div><div class="r" style="margin:3px 0 0">${shortDate(LS.meta.calFrom)} to ${shortDate(LS.meta.calTo)} · dark = taken</div>` : '') +
-    (/^\d+$/.test(l.id) ? `<a href="https://www.airbnb.co.uk/rooms/${l.id}" target="_blank" rel="noopener">Open on Airbnb</a>` : '');
+    (l.cal && LS.meta.calFrom && LS.meta.calTo ? `<div class="calstrip" role="img" aria-label="Nights taken and free, ${shortDate(LS.meta.calFrom)} to ${shortDate(LS.meta.calTo)}">${l.cal.split('').map(ch => `<i class="${ch === 'a' ? '' : 't'}"></i>`).join('')}</div><div class="r" style="margin:3px 0 0">${shortDate(LS.meta.calFrom)} to ${shortDate(LS.meta.calTo)} · dark = taken</div>` : '') +
+    airbnbLink(l, '');
+}
+// Listings that pass the filters and sit inside the map view, best first.
+function listNow(){
+  const b = lmap ? lmap.getBounds() : null, k = lstate.sort;
+  const rows = LS.items.filter(l => bedMatch(l) && showMatch(l) && (!b || (typeof l.lat === 'number' && typeof l.lng === 'number' && b.contains([l.lat, l.lng]))));
+  rows.sort((x, y) => { const a = x[k], c = y[k]; if (a == null && c == null) return (y.reviews || 0) - (x.reviews || 0); if (a == null) return 1; if (c == null) return -1; return c - a; });
+  return rows;
+}
+function highlight(id, on){
+  const p = pins[id] && pins[id].getElement(); if (p && p.firstChild) p.firstChild.classList.toggle('on', on);
+  document.querySelectorAll('.lcard').forEach(c => { if (c.dataset.card === id) c.classList.toggle('on', on); });
+}
+function openListing(id){
+  const mk = lmarkers[id]; if (!mk || !lmap) return;
+  lstate.hold = true; // keep the list as it is while the map nudges itself to fit the popup
+  if (!dotLayer.hasLayer(mk)) dotLayer.addLayer(mk);
+  mk.openPopup();
+}
+function syncDots(){
+  if (!dotLayer) return;
+  dotLayer.clearLayers();
+  LS.items.filter(l => bedMatch(l) && showMatch(l)).sort((a, b) => (a.occ == null ? -1 : a.occ) - (b.occ == null ? -1 : b.occ)).forEach(l => {
+    const mk = lmarkers[l.id]; if (mk) { mk.setStyle({ fillColor: occColor(l) }); dotLayer.addLayer(mk); }
+  });
+}
+function syncList(){
+  if (!lFresh()) return;
+  const rows = listNow(), pages = Math.max(1, Math.ceil(rows.length / lstate.per));
+  lstate.page = Math.max(0, Math.min(lstate.page, pages - 1));
+  const page = rows.slice(lstate.page * lstate.per, (lstate.page + 1) * lstate.per);
+  $('#ex-badge').innerHTML = `<b>${nf0.format(rows.length)} listing${rows.length === 1 ? '' : 's'} in this area</b><span>${rows.length > page.length ? 'Price pins mark the ' + page.length + ' listed on this page' : 'Zoom or drag the map to change the list'}</span>`;
+  $('#cards').innerHTML = page.length ? page.map(cardHtml).join('') : '<p class="note">No listings match in this part of the map. Zoom out, or change the filters.</p>';
+  $('#pager').innerHTML = pages > 1 ? `<button type="button" class="more-btn" data-pg="-1"${lstate.page === 0 ? ' disabled' : ''}>Previous</button><span>Page ${lstate.page + 1} of ${nf0.format(pages)}</span><button type="button" class="more-btn" data-pg="1"${lstate.page >= pages - 1 ? ' disabled' : ''}>Next</button>` : '';
+  if (pinLayer) {
+    pinLayer.clearLayers(); pins = Object.create(null);
+    page.forEach(l => {
+      if (typeof l.lat !== 'number' || typeof l.lng !== 'number') return;
+      const mk = L.marker([l.lat, l.lng], { icon: L.divIcon({ className: 'pin-wrap', html: `<span class="pin">${esc(lMoney(l.adr))}</span>`, iconSize: null }), zIndexOffset: 500, keyboard: false });
+      mk.on('click', () => openListing(l.id)).on('mouseover', () => highlight(l.id, true)).on('mouseout', () => highlight(l.id, false));
+      pinLayer.addLayer(mk); pins[l.id] = mk;
+    });
+  }
+  const est = rows.filter(l => l.occ != null), mo = median(est.map(l => l.occ)), K0 = R.kpi;
+  $('#area').innerHTML = `<h3>Map area overview</h3><p class="sub">The ${nf0.format(rows.length)} listing${rows.length === 1 ? '' : 's'} in view${AB ? '; revenue and occupancy from the ' + nf0.format(est.length) + ' with three or more reviews' : ''}.</p>` +
+    `<div class="ov"><div><span>Occupancy rate</span><b>${mo != null ? Math.round(mo) + '%' : '–'}</b><small>median${AB ? ', estimated' : ''}</small></div>` +
+    `<div><span>Revenue</span><b>${lMoney(median(est.map(l => l.rev)))}</b><small>median a year${AB ? ', estimated' : ''}</small></div>` +
+    `<div><span>Nightly rate</span><b>${lMoney(median(rows.map(l => l.adr)))}</b><small>median</small></div>` +
+    `<div><span>Active listings</span><b>${nf0.format(rows.length)}</b><small>in view</small></div></div>` +
+    `<p class="note">Whole Rabat market, measured by AirROI: ${K0.occupancy}% occupancy, ${money(K0.revenue)} average revenue, ${money(K0.adr)} a night, ${nf0.format(K0.listings)} listings.</p>`;
+}
+function renderExplorer(){
+  if (!lFresh()) return;
+  const all = LS.items, nEst = all.filter(l => l.occ != null).length;
+  $('#listings-dek').textContent = AB
+    ? `${nf0.format(all.length)} Rabat listings read from Airbnb's public map search on ${lWhen()}, about ${Math.round(all.length / K.listings * 100)}% of the ${nf0.format(K.listings)} AirROI counts as active. ${nf0.format(nEst)} have enough reviews for a revenue and occupancy estimate.`
+    : `${nf0.format(all.length)} Rabat listings pulled from AirROI's API on ${lWhen()}.`;
+  $('#bed-filter').innerHTML = bedChips().map(b => `<button type="button" data-b="${b[0]}" aria-pressed="${b[0] === lstate.beds}">${b[1]}</button>`).join('');
+  $('#llegend').innerHTML = $('#llegend-m').innerHTML = `<span class="box-label">Occupancy rate${AB ? ', estimated' : ''}</span>` + ['Under 25%', '25 to 50%', '50 to 75%', '75% and over'].map((t, i) => `<span><span class="sw" style="background:${BINCOL[i]}"></span>${t}</span>`).join('') + `<span><span class="sw" style="background:${GREY}"></span>No estimate</span>`;
+  $('#listings-note').textContent = AB
+    ? `Revenue and occupancy are estimates, not measurements. Each listing is ranked by how often it is reviewed for its age (the age comes from its Airbnb ID), then given the occupancy that AirROI's Rabat data shows at that rank. Revenue is the daily rate × that occupancy × ${LS.meta.openNights || 243} nights, the average a Rabat listing is open in a year. Revenue potential is the daily rate at ${LS.meta.topQuarterOcc || 62}% occupancy, the level the top quarter of listings reach, open all year. The daily rate is the one-night price Airbnb showed in late November, so it is a spot price. Listings with fewer than three reviews get no estimate.`
+    : 'Revenue, occupancy and rate cover the trailing twelve months, as measured by AirROI.';
+  syncDots(); syncList();
 }
 function initListings(){
-  const setup = $('#listings-setup'), card = $('#listings-card');
+  const setup = $('#listings-setup'), ex = $('#ex');
   if (!lFresh()) {
-    card.hidden = true; setup.hidden = false;
-    $('#listings-dek').textContent = LS ? 'The saved listing pull has expired.' : 'A pin for each Rabat listing, with its own price, rating and reviews.';
+    ex.hidden = true; setup.hidden = false;
     setup.innerHTML = LS
-      ? `<h3>This pull is ${isNaN(lAge()) ? 'undated' : lAge() + ' days old'}</h3><p class="sub">AirROI's API terms limit how long pulled data may be kept to 30 days, so the pins are hidden until it is refreshed.</p>` +
-        `<p>Run <code>python3 fetch_listings.py --restart</code> in the <code>morocco-str</code> folder, then reload this page. Each page of listings costs $0.50 of AirROI credit, and the script asks before spending anything.</p>`
-      : '<h3>No listings loaded</h3><p class="sub">The file <code>listings.js</code> is empty. Ask Claude to collect Rabat listings from Airbnb\'s public map search again, or use <code>fetch_listings.py</code> with an AirROI API key for measured revenue per listing.</p>';
+      ? `<h3>This pull is ${isNaN(lAge()) ? 'undated' : lAge() + ' days old'}</h3><p class="sub">AirROI's API terms limit how long pulled data may be kept to 30 days, so the listings are hidden until it is refreshed.</p>` +
+        `<p>Run <code>python3 fetch_listings.py --restart</code> in the <code>morocco-str</code> folder, then reload this page.</p>`
+      : '<h3>No listings loaded</h3><p class="sub">The file <code>listings.js</code> is empty, so there is nothing to put on the map. The market figures below are unaffected.</p>';
     return;
   }
-  setup.hidden = true; card.hidden = false;
-  const vals = LS.items.map(l => l[PK] || 0).sort((a, b) => a - b), q = p => vals[Math.min(vals.length - 1, Math.floor(p * vals.length))];
-  lq = [q(.25), q(.5), q(.75)];
-  if (!window.L) { $('#lmap').innerHTML = '<p style="padding:20px;color:#52514e">The map needs an internet connection to load. The table below has every listing.</p>'; return; }
-  lmap = L.map('lmap', { scrollWheelZoom: false, preferCanvas: true, zoomControl: false });
+  setup.hidden = true; ex.hidden = false;
+  LS.items.forEach(l => { byId[l.id] = l; });
+  $('#f-show').addEventListener('change', e => { lstate.show = e.target.value; lstate.page = 0; renderExplorer(); });
+  $('#f-sort').addEventListener('change', e => { lstate.sort = e.target.value; lstate.page = 0; syncList(); });
+  if (!window.L) { $('#lmap').innerHTML = '<p style="padding:20px;color:#52514e">The map needs an internet connection to load. The list still works.</p>'; return; }
+  lmap = L.map('lmap', { scrollWheelZoom: true, preferCanvas: true, zoomControl: false });
   L.control.zoom({ position: 'bottomright' }).addTo(lmap);
   const popW = popupWidth('#lmap');
   baseLayer(18).addTo(lmap);
   if (BUNDLED) { lmap.setMinZoom(12); lmap.setMaxZoom(16); lmap.setMaxBounds([[33.85, -7.05], [34.12, -6.66]]); }
-  lLayer = L.layerGroup().addTo(lmap);
+  dotLayer = L.layerGroup().addTo(lmap); pinLayer = L.layerGroup().addTo(lmap);
   const pts = [];
   LS.items.forEach(l => {
     if (typeof l.lat !== 'number' || typeof l.lng !== 'number') return;
     pts.push([l.lat, l.lng]);
-    const mk = L.circleMarker([l.lat, l.lng], { radius: AB ? 5 : 6, fillColor: BINCOL[lBin(l)], fillOpacity: .92, color: '#fff', weight: 1.2 });
+    const mk = L.circleMarker([l.lat, l.lng], { radius: 5, fillColor: occColor(l), fillOpacity: .92, color: '#fff', weight: 1.2 });
     mk.bindPopup(() => lPopup(l), popW);
     mk.on('popupopen', () => mk.closeTooltip());
-    mk.bindTooltip(() => `${esc(l.name || 'Listing')} · ${lMoney(l[PK], !AB)}${AB ? ' a night' : ''}`, { direction: 'top' });
+    mk.bindTooltip(() => `${esc(l.name || 'Listing')} · ${lMoney(l.adr)} a night`, { direction: 'top' });
     lmarkers[l.id] = mk;
   });
   // Open on the middle of the listings rather than their outer edge, so the dense centre is readable.
   if (pts.length > 200) lmap.setView([median(pts.map(p => p[0])), median(pts.map(p => p[1]))], 13);
   else if (pts.length) lmap.fitBounds(pts, { padding: [24, 24], maxZoom: 14 });
   else lmap.setView([34.013, -6.84], 12);
+  // The list follows the map. A popup nudging the map into place does not count as the reader moving it.
+  lmap.on('popupopen', () => { lstate.hold = true; });
+  lmap.on('popupclose', () => { lstate.hold = false; });
+  lmap.on('dragstart zoomstart', () => { lstate.hold = false; });
+  lmap.on('moveend', () => { if (!lstate.hold) { lstate.page = 0; syncList(); } });
 }
-const LCOLS = AB
-  ? [['name', 'Listing', 0], ['adr', 'Nightly price', 1]].concat(HAS_CAL ? [['occ', 'Nights taken', 1]] : [], [['rating', 'Rating', 1], ['reviews', 'Reviews', 1], ['rev', 'Rough annual revenue', 1]])
-  : [['name', 'Listing', 0], ['rev', 'Revenue', 1], ['occ', 'Occupancy', 1], ['adr', 'Nightly rate', 1], ['availDays', 'Days available', 1], ['bookedDays', 'Days booked', 1]];
-const lCell = (l, k) => k === 'adr' || k === 'rev' ? lMoney(l[k]) : k === 'occ' ? (l.occ != null ? l.occ + '%' : '–')
-  : k === 'rating' ? (l.rating ? (+l.rating).toFixed(2) : l.isNew ? 'New' : '–') : k === 'reviews' ? nf0.format(l.reviews || 0) : (l[k] != null ? l[k] : '–');
-function renderListings(){
-  if (!lFresh()) return;
-  const all = LS.items, T = LS.meta.totalInMarket, rows = all.filter(l => bedMatch(l) && (l.reviews || 0) >= lstate.minRev), { key, dir } = lstate.sort;
-  const partial = T && all.length < T;
-  $('#listings-dek').textContent = AB
-    ? `${nf0.format(all.length)} Rabat listings read from Airbnb's public map search on ${lWhen()}, about ${Math.round(all.length / K.listings * 100)}% of the ${nf0.format(K.listings)} that AirROI counts as active.`
-    : `${nf0.format(all.length)}${T ? ' of ' + nf0.format(T) : ''} Rabat listings, pulled from AirROI's API on ${lWhen()}.` +
-      (partial && LS.meta.sort === 'ttm_revenue' ? ' These are the highest earners, not a random sample, so the medians here run above the market as a whole.' : '');
-  $('#bed-filter').innerHTML = bedChips().map(b => `<button type="button" data-b="${b[0]}" aria-pressed="${b[0] === lstate.beds}">${b[1]}</button>`).join('');
-  // Half of Rabat's listings have few or no reviews, and that is where placeholder prices sit.
-  $('#rev-filter').innerHTML = [[0, 'All listings'], [10, '10+ reviews']].map(o => `<button type="button" data-r="${o[0]}" aria-pressed="${o[0] === lstate.minRev}">${o[1]}</button>`).join('');
-  const n = `${nf0.format(rows.length)} listing${rows.length === 1 ? '' : 's'}`, mOcc = median(rows.map(l => l.occ)), mRat = median(rows.map(l => l.rating));
-  $('#listings-summary').textContent = !rows.length ? 'No listings match' : AB
-    ? `${n} · median nightly price ${lMoney(median(rows.map(l => l.adr)))} · median rating ${mRat != null ? mRat.toFixed(2) : '–'} · median ${nf0.format(Math.round(median(rows.map(l => l.reviews || 0))))} reviews` + (HAS_CAL && mOcc != null ? ` · median ${Math.round(mOcc)}% of nights taken (${nf0.format(rows.filter(l => l.occ != null).length)} calendars read)` : '')
-    : `${n} · median revenue ${lMoney(median(rows.map(l => l.rev)))} · occupancy ${mOcc != null ? Math.round(mOcc) + '%' : '–'} · nightly ${lMoney(median(rows.map(l => l.adr)))}`;
-  const byOcc = HAS_CAL && lstate.color === 'occ', rank = l => byOcc ? (l.occ == null ? -1 : l.occ) : (l[PK] || 0);
-  const colorOf = l => byOcc ? (l.occ == null ? GREY : BINCOL[l.occ < 25 ? 0 : l.occ < 50 ? 1 : l.occ < 75 ? 2 : 3]) : BINCOL[lBin(l)];
-  $('#color-by').hidden = !HAS_CAL;
-  $('#color-by').innerHTML = HAS_CAL ? [['price', 'Colour by price'], ['occ', 'by nights taken']].map(o => `<button type="button" data-ck="${o[0]}" aria-pressed="${o[0] === lstate.color}">${o[1]}</button>`).join('') : '';
-  if (lLayer) { lLayer.clearLayers(); rows.slice().sort((a, b) => rank(a) - rank(b)).forEach(l => { const mk = lmarkers[l.id]; if (mk) { mk.setStyle({ fillColor: colorOf(l) }); lLayer.addLayer(mk); } }); }
-  const lab = [`Under ${lMoney(lq[0], !AB)}`, `${lMoney(lq[0], !AB)} to ${lMoney(lq[1], !AB)}`, `${lMoney(lq[1], !AB)} to ${lMoney(lq[2], !AB)}`, `${lMoney(lq[2], !AB)} and over`];
-  $('#llegend').innerHTML = byOcc
-    ? `<span>Nights already taken, ${shortDate(LS.meta.calFrom)} to ${shortDate(LS.meta.calTo)}:</span>` + ['Under 25%', '25% to 50%', '50% to 75%', '75% and over'].map((t, i) => `<span><span class="sw" style="background:${BINCOL[i]}"></span>${t}</span>`).join('') + `<span><span class="sw" style="background:${GREY}"></span>Calendar not read</span>`
-    : `<span>${AB ? 'Nightly price, by quarter of listings:' : 'Annual revenue, by quarter of the pulled listings:'}</span>` + lab.map((t, i) => `<span><span class="sw" style="background:${BINCOL[i]}"></span>${t}</span>`).join('');
-  const sorted = rows.slice().sort((a, b) => {
-    const x = a[key], y = b[key];
-    if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
-    return (typeof x === 'string' ? x.localeCompare(y) : x - y) * dir;
-  });
-  $('#tbl-props').innerHTML = '<thead><tr>' + LCOLS.map(c => `<th class="${c[2] ? 'num' : ''}" aria-sort="${key === c[0] ? (dir > 0 ? 'ascending' : 'descending') : 'none'}"><button type="button" class="th-btn" data-lk="${c[0]}">${c[1]}<span class="arrow">${key === c[0] ? (dir > 0 ? '▲' : '▼') : ''}</span></button></th>`).join('') + '</tr></thead><tbody>' +
-    sorted.slice(0, lstate.show).map(l => `<tr class="clickable" data-lid="${esc(l.id)}" tabindex="0"><td>${esc(l.name || 'Listing')}<span class="minor">${esc(lDesc(l))}</span></td>` + LCOLS.slice(1).map(c => `<td class="num">${lCell(l, c[0])}</td>`).join('') + '</tr>').join('') + '</tbody>';
-  $('#props-more').innerHTML = sorted.length > lstate.show ? `<button type="button" class="more-btn" data-more="1">Show 25 more (${nf0.format(sorted.length - lstate.show)} left)</button>` : '';
-  $('#listings-note').textContent = AB
-    ? "Select a row to find the listing on the map. Nightly price is the one-night price Airbnb showed for each listing's next open date, so it is a late-November spot price, not a yearly average. Rough annual revenue multiplies that price by 365 nights and by the market's average occupancy for a home of that size, so it shows scale and is not a measurement of that listing. Airbnb places many pins approximately." +
-      (HAS_CAL ? ` Nights taken is the share of nights from ${shortDate(LS.meta.calFrom)} to ${shortDate(LS.meta.calTo)} that could not be booked when the calendars were read (${nf0.format(LS.meta.calCount)} listings with 10 or more reviews). A guest booking and a night the host has blocked look the same, so it is an upper bound on bookings, and later dates will still fill.` : '')
-    : 'Select a row to find the listing on the map. Airbnb hides the exact address of many listings, so some pins are approximate. Revenue, occupancy and rate cover the trailing twelve months.';
-}
-function focusListing(id){
-  const mk = lmarkers[id]; if (!mk || !lmap) return;
-  $('#lmap').scrollIntoView({ behavior: 'smooth', block: 'center' });
-  showMarker(lmap, mk, 15);
+function toggleSave(id){
+  if (saved[id]) delete saved[id]; else saved[id] = 1;
+  try { localStorage.setItem('str-saved', JSON.stringify(Object.keys(saved))); } catch (e) {}
+  syncList(); if (lstate.show === 'saved') syncDots();
 }
 
 function renderAbout(){
@@ -546,9 +591,9 @@ function renderAbout(){
   $('#about').innerHTML = [
     `Market figures: AirROI. (2026). <a href="${L.airroiRabat}" target="_blank" rel="noopener">Rabat, Morocco Airbnb market data</a>, ${D.meta.period}, and its <a href="${L.airroiMorocco}" target="_blank" rel="noopener">Morocco market ranking</a>, both updated ${D.meta.sourceUpdated}. Read from the free public pages on ${D.meta.snapshot}; AirROI refreshes them monthly.`,
     `Second opinion: <a href="${L.airbticsRabat}" target="_blank" rel="noopener">Airbtics' free Rabat summary</a>. Nothing here comes from Airbtics' paid dashboard.`,
-    (typeof AB !== 'undefined' && AB)
-      ? `Listing pins: read from Airbnb's public Rabat map search on ${lWhen()}. Price, rating and review count are as Airbnb showed them; revenue per listing is a rough guide, not a measurement.` + (HAS_CAL ? ` Nights taken comes from each listing's public calendar and counts host-blocked nights as well as bookings.` : '')
-      : `Listing pins, when set up, come from <a href="${L.airroiApi}" target="_blank" rel="noopener">AirROI's API</a> under your own key, and are kept for at most 30 days as its terms require.`,
+    AB
+      ? `Listings on the map: read from Airbnb's public Rabat map search on ${lWhen()}. Daily rate, rating and review count are as Airbnb showed them. Revenue and occupancy per listing are estimates from review pace, calibrated to AirROI's market figures; the note under the list explains how.`
+      : `Listings on the map, when loaded, come from <a href="${L.airroiApi}" target="_blank" rel="noopener">AirROI's API</a> under your own key, and are kept for at most 30 days as its terms require.`,
     `All figures are estimates modelled from public Airbnb listings and calendars. They are gross bookings before costs and tax, and cover Airbnb only. For personal research; check anything that matters against the source.`,
     `Source figures are in Moroccan dirhams. Other currencies are converted at ${state.live ? 'the current rate' : 'a saved rate'} (${rate}, ${state.ratesDate}). <a href="${L.fx}" target="_blank" rel="noopener">Rates by Exchange Rate API</a>.`
   ].map(t => `<li>${t}</li>`).join('');
@@ -556,32 +601,34 @@ function renderAbout(){
 
 function renderAll(init){
   renderHeader(); renderOverview(); renderTrends(); renderSpread(); renderSize(); renderCalc(init);
-  renderSupply(); renderGuests(); renderTop(); renderListings(); renderLegend(); renderMarkets(); renderAbout();
+  renderSupply(); renderGuests(); renderTop(); renderExplorer(); renderLegend(); renderMarkets(); renderAbout();
 }
 
 /* ---------- events ---------- */
 document.addEventListener('click', e => {
-  const b = e.target.closest('button, tr.clickable'); if (!b) return;
+  if (e.target.closest('a')) return; // links do their own thing
+  const b = e.target.closest('button, tr.clickable, .lcard'); if (!b) return;
   // Re-rendering replaces the button that was pressed, so note which one it was and hand focus back to it.
   const dk = b.tagName === 'BUTTON' ? Object.keys(b.dataset)[0] : null;
-  const again = dk ? `button[data-${dk.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}="${b.dataset[dk]}"]` : null;
+  const again = dk && window.CSS && CSS.escape ? `button[data-${dk.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}="${CSS.escape(b.dataset[dk])}"]` : null;
   if (b.dataset.c) { state.cur = b.dataset.c; try { localStorage.setItem('str-cur', state.cur); } catch (err) {} renderAll(); }
   else if (b.dataset.m) { state.metric = b.dataset.m; renderTrends(); }
   else if (b.dataset.v) setView(b.dataset.v);
   else if (b.dataset.f) { state.filter = b.dataset.f; renderMarkets(); }
   else if (b.dataset.k) { const k = b.dataset.k; state.sort = { key: k, dir: state.sort.key === k ? -state.sort.dir : (k === 'rank' || k === 'name' ? 1 : -1) }; renderMarkets(); }
   else if (b.dataset.n) focusMarket(b.dataset.n);
-  else if (b.dataset.b) { lstate.beds = b.dataset.b; lstate.show = 25; renderListings(); }
-  else if (b.dataset.r) { lstate.minRev = +b.dataset.r; lstate.show = 25; renderListings(); }
-  else if (b.dataset.ck) { lstate.color = b.dataset.ck; renderListings(); }
-  else if (b.dataset.lk) { const k = b.dataset.lk; lstate.sort = { key: k, dir: lstate.sort.key === k ? -lstate.sort.dir : (k === 'name' ? 1 : -1) }; renderListings(); }
-  else if (b.dataset.more) { lstate.show += 25; renderListings(); }
-  else if (b.dataset.lid) focusListing(b.dataset.lid);
-  if (again) { const nb = document.querySelector(again); if (nb && nb !== document.activeElement) nb.focus({ preventScroll: true }); }
+  else if (b.dataset.b) { lstate.beds = b.dataset.b; lstate.page = 0; renderExplorer(); }
+  else if (b.dataset.pg) { lstate.page += +b.dataset.pg; syncList(); }
+  else if (b.dataset.save) toggleSave(b.dataset.save);
+  else if (b.dataset.card) openListing(b.dataset.card);
+  if (again) { let nb = null; try { nb = document.querySelector(again); } catch (err) {} if (nb && !nb.disabled && nb !== document.activeElement) nb.focus({ preventScroll: true }); }
 });
+document.addEventListener('mouseover', e => { const c = e.target.closest && e.target.closest('.lcard'); if (c && !c.contains(e.relatedTarget)) highlight(c.dataset.card, true); });
+document.addEventListener('mouseout', e => { const c = e.target.closest && e.target.closest('.lcard'); if (c && !c.contains(e.relatedTarget)) highlight(c.dataset.card, false); });
 document.addEventListener('keydown', e => {
-  if (e.key !== 'Enter' || !e.target.matches('tr.clickable')) return;
-  if (e.target.dataset.lid) focusListing(e.target.dataset.lid); else focusMarket(e.target.dataset.n);
+  if (e.key !== 'Enter') return;
+  if (e.target.matches('.lcard')) openListing(e.target.dataset.card);
+  else if (e.target.matches('tr.clickable')) focusMarket(e.target.dataset.n);
 });
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(renderTrends, 120); });
 

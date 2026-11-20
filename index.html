@@ -42,9 +42,9 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 h1,h2,h3{text-wrap:balance;margin:0}
 
 /* masthead */
-.mast{padding:36px 0 22px}
+.mast{padding:18px 0 12px}
 .eyebrow{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
-.mast h1{font-size:32px;line-height:1.15;font-weight:650;margin-top:6px;letter-spacing:-.01em}
+.mast h1{font-size:24px;line-height:1.15;font-weight:650;margin-top:6px;letter-spacing:-.01em}
 .mast p{margin:8px 0 0;color:var(--ink2);max-width:68ch}
 
 /* sticky nav */
@@ -162,6 +162,71 @@ details.table-view table{margin-top:8px;font-size:13.5px}
 .calstrip i{flex:1;height:10px;background:#e1e0d9;border-radius:1px}
 .calstrip i.t{background:#1c5cab}
 .seg[hidden]{display:none}
+/* explorer: the map and the listings it shows */
+.explore{padding:0;scroll-margin-top:0}
+.explore .setup{margin:20px 0}
+.ex{display:grid;grid-template-columns:minmax(0,46fr) minmax(0,54fr);background:var(--surface);border-bottom:1px solid var(--border)}
+.ex[hidden]{display:none}
+.ex-map{position:sticky;top:calc(49px + env(safe-area-inset-top,0px));height:calc(100vh - 49px);min-height:520px;align-self:start;
+  --surface:#fcfcfb;--page:#f9f9f7;--ink:#0b0b0b;--ink2:#52514e;--border:rgba(11,11,11,.10)} /* map furniture stays light: the basemap is */
+.ex-map #lmap{position:absolute;inset:0;height:auto;border:0;border-radius:0}
+.ex-badge{position:absolute;left:12px;top:12px;z-index:500;max-width:calc(100% - 24px);background:rgba(11,11,11,.84);color:#fff;border-radius:10px;padding:8px 12px;font-size:12.5px;line-height:1.35;pointer-events:none}
+.ex-badge b{display:block;font-size:15px;font-weight:650}
+.ex-badge span{opacity:.86}
+.ex-tools{position:absolute;left:12px;bottom:24px;z-index:500;display:grid;gap:6px;justify-items:start;max-width:calc(100% - 70px)}
+.ex-tools .box{background:#fcfcfb;color:#0b0b0b;border-radius:10px;padding:6px 8px;box-shadow:0 1px 5px rgba(0,0,0,.28);font-size:12.5px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
+.ex-tools .seg{flex-wrap:wrap}
+.box-label{font-weight:650}
+.ex-tools .sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(11,11,11,.18)}
+.pin-wrap{background:none;border:0}
+.pin{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;background:#fff;color:#0b0b0b;font:650 13px/1 system-ui,-apple-system,"Segoe UI",sans-serif;padding:6px 9px;border-radius:999px;border:1px solid rgba(0,0,0,.1);box-shadow:0 1px 5px rgba(0,0,0,.35);cursor:pointer}
+.pin.on{background:#0b0b0b;color:#fff}
+.ex-side{min-width:0;padding:14px max(16px,env(safe-area-inset-right,0px)) 26px 18px}
+.ex-filters{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-bottom:12px}
+.ex-flabel{font-size:12px;font-weight:650;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.sel{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink2)}
+.sel select{font:inherit;font-size:13.5px;padding:6px 8px;border-radius:8px;border:1px solid var(--axis);background:var(--page);color:var(--ink)}
+.sel select:focus-visible{outline:2px solid var(--series);outline-offset:1px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(236px,1fr));gap:12px}
+.lcard{min-width:0;display:flex;flex-direction:column;gap:8px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--page);cursor:pointer}
+.lcard:hover,.lcard.on{border-color:var(--series);box-shadow:0 0 0 1px var(--series)}
+.lcard:focus-visible{outline:2px solid var(--series);outline-offset:2px}
+.lcard header{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.lc-kind{font-weight:650;font-size:14.5px;line-height:1.25}
+.lc-stars{font-size:13px;color:var(--ink2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.lc-name{margin:0;font-size:13.5px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lc-row{display:grid;gap:8px;padding-top:8px;border-top:1px solid var(--grid)}
+.lc-row.two{grid-template-columns:1fr 1fr}
+.lc-row.three{grid-template-columns:1fr 1fr 1fr}
+.m b{display:block;font-size:15.5px;font-weight:650;font-variant-numeric:tabular-nums;white-space:nowrap}
+.m.key b{font-size:18px}
+.m span{display:block;font-size:12px;line-height:1.25;color:var(--muted)}
+abbr[title]{text-decoration:none;font-size:11px;border-bottom:1px dotted var(--muted);cursor:help}
+.lc-why{margin:0;font-size:12px;color:var(--muted)}
+.lc-actions{display:flex;gap:8px;margin-top:auto;padding-top:2px}
+.btn{flex:1;text-align:center;font:inherit;font-size:13.5px;font-weight:600;padding:8px 10px;border-radius:8px;border:1px solid transparent;background:color-mix(in srgb,var(--series) 13%,transparent);color:var(--link);text-decoration:none;cursor:pointer}
+.btn:hover{background:color-mix(in srgb,var(--series) 22%,transparent)}
+.btn.ghost{flex:0 0 auto;background:none;border-color:var(--axis);color:var(--ink2)}
+.btn.ghost[aria-pressed="true"]{color:var(--bad);border-color:var(--bad)}
+.btn:focus-visible{outline:2px solid var(--series);outline-offset:2px}
+.pager{display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0;font-size:13.5px;color:var(--ink2)}
+.pager .more-btn{margin-top:0}
+.more-btn[disabled]{opacity:.45;cursor:default}
+#area{margin-top:6px;background:var(--page)}
+#llegend-m{display:none;margin:0 0 12px;font-size:12.5px}
+#llegend-m .box-label{color:var(--ink)}
+.ov{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.ov span{display:block;font-size:13px;color:var(--ink2)}
+.ov b{display:block;font-size:24px;font-weight:650;margin-top:2px;font-variant-numeric:tabular-nums}
+.ov small{font-size:12px;color:var(--muted)}
+@media (max-width:980px){
+  .ex{grid-template-columns:minmax(0,1fr)}
+  .ex-map{position:relative;top:auto;height:64vh;min-height:380px}
+  .ex-side{padding-left:max(16px,env(safe-area-inset-left,0px))}
+  .ex-tools #llegend{display:none}
+  #llegend-m{display:flex}
+}
+@media (max-width:520px){.ov{grid-template-columns:repeat(2,minmax(0,1fr))}.lc-row.three{gap:6px}.m.key b{font-size:16.5px}}
 .setup ol{margin:8px 0 0;padding-left:20px;color:var(--ink2)}
 .setup li{margin:6px 0;max-width:80ch}
 code{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--wash);padding:1px 5px;border-radius:4px}
@@ -199,13 +264,42 @@ footer li{margin:5px 0;max-width:92ch}
 <div class="nav">
   <div class="wrap">
     <nav class="nav-links" aria-label="Sections">
-      <a href="#overview">Overview</a><a href="#trends">Trends</a><a href="#spread">Spread</a>
+      <a href="#explore">Map</a><a href="#overview">Overview</a><a href="#trends">Trends</a><a href="#spread">Spread</a>
       <a href="#size">By size</a><a href="#calc">Calculator</a><a href="#supply">Supply</a>
-      <a href="#guests">Guests</a><a href="#top">Top earners</a><a href="#listings">Listings</a><a href="#morocco">Morocco</a>
+      <a href="#guests">Guests</a><a href="#top">Top earners</a><a href="#morocco">Morocco</a>
     </nav>
     <div class="seg" id="cur" role="group" aria-label="Currency"></div>
   </div>
 </div>
+
+<section id="explore" class="explore" aria-label="Rabat listings map">
+  <div class="wrap"><div class="card setup" id="listings-setup" hidden></div></div>
+  <div class="ex" id="ex">
+    <div class="ex-map">
+      <div id="lmap"></div>
+      <div class="ex-badge" id="ex-badge"></div>
+      <div class="ex-tools">
+        <div class="box"><span class="box-label">Listing filter</span><div class="seg" id="bed-filter" role="group" aria-label="Bedrooms"></div></div>
+        <div class="box" id="llegend"></div>
+      </div>
+    </div>
+    <div class="ex-side">
+      <div class="ex-filters">
+        <span class="ex-flabel">Filters</span>
+        <label class="sel" for="f-show"><span>Listings</span>
+          <select id="f-show"><option value="all">All listings</option><option value="est">With revenue and occupancy</option><option value="r10">10 or more reviews</option><option value="saved">Saved</option></select></label>
+        <label class="sel" for="f-sort"><span>Sort by</span>
+          <select id="f-sort"><option value="rev">Revenue</option><option value="occ">Occupancy rate</option><option value="adr">Daily rate</option><option value="pot">Revenue potential</option><option value="reviews">Reviews</option></select></label>
+      </div>
+      <div class="legend" id="llegend-m"></div>
+      <div class="cards" id="cards"></div>
+      <div class="pager" id="pager"></div>
+      <div class="card" id="area"></div>
+      <p class="note" id="listings-dek"></p>
+      <p class="note" id="listings-note"></p>
+    </div>
+  </div>
+</section>
 
 <main class="wrap">
 
@@ -306,22 +400,6 @@ footer li{margin:5px 0;max-width:92ch}
     <div class="card"><h3>Top hosts by revenue</h3><p class="sub">The ten largest run about 10% of listings</p><div class="tbl-wrap"><table id="tbl-hosts"></table></div></div>
   </div>
   <p class="note" id="atlas-note"></p>
-</section>
-
-<section id="listings">
-  <div class="sec-head"><h2>Rabat listings</h2><p id="listings-dek"></p></div>
-  <div class="card setup" id="listings-setup" hidden></div>
-  <div class="card" id="listings-card" hidden>
-    <div class="map-bar">
-      <div style="display:flex;flex-wrap:wrap;gap:8px"><div class="seg" id="bed-filter" role="group" aria-label="Bedrooms"></div><div class="seg" id="rev-filter" role="group" aria-label="Reviews"></div><div class="seg" id="color-by" role="group" aria-label="Pin colour" hidden></div></div>
-      <div id="listings-summary" style="font-size:13.5px;color:var(--ink2)"></div>
-    </div>
-    <div id="lmap"></div>
-    <div class="legend" id="llegend"></div>
-    <div class="tbl-wrap" style="margin-top:16px"><table id="tbl-props"></table></div>
-    <div id="props-more"></div>
-    <p class="note" id="listings-note"></p>
-  </div>
 </section>
 
 <section id="morocco">
