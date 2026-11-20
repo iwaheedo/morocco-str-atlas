@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en" class="locked">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Only this page's own files, the pinned Leaflet build, map tiles and the exchange-rate feed may load. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: https://tile.openstreetmap.org https://unpkg.com; connect-src 'self' https://open.er-api.com; base-uri 'none'; form-action 'none'">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Morocco STR Atlas</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+<style>
+:root{
+  color-scheme:light;
+  --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#6e6d68;
+  --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10); --wash:rgba(11,11,11,.05);
+  --series:#2a78d6; --series-soft:#b7d3f6; --link:#1c5cab; --good:#006300; --bad:#d03b3b;
+  --tip-bg:#0b0b0b; --tip-ink:#fcfcfb;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10); --wash:rgba(255,255,255,.07);
+    --series:#3987e5; --series-soft:#184f95; --link:#86b6ef; --good:#0ca30c; --bad:#e66767;
+    --tip-bg:#f0efec; --tip-ink:#0b0b0b;
+  }
+}
+:root[data-theme="dark"]{
+    color-scheme:dark;
+    --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10); --wash:rgba(255,255,255,.07);
+    --series:#3987e5; --series-soft:#184f95; --link:#86b6ef; --good:#0ca30c; --bad:#e66767;
+    --tip-bg:#f0efec; --tip-ink:#0b0b0b;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--page);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--link);text-underline-offset:2px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:1001;background:var(--page)}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{text-wrap:balance;margin:0}
+
+/* masthead */
+.mast{padding:36px 0 22px}
+.eyebrow{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.mast h1{font-size:32px;line-height:1.15;font-weight:650;margin-top:6px;letter-spacing:-.01em}
+.mast p{margin:8px 0 0;color:var(--ink2);max-width:68ch}
+
+/* sticky nav */
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:1000;background:color-mix(in srgb,var(--page) 92%,transparent);backdrop-filter:blur(8px);border-block:1px solid var(--border)}
+.nav .wrap{display:flex;align-items:center;gap:12px;min-height:48px}
+.nav-links{display:flex;gap:2px;overflow-x:auto;flex:1;scrollbar-width:none;margin-left:-10px}
+.nav-links::-webkit-scrollbar{display:none}
+.nav-links a{white-space:nowrap;text-decoration:none;color:var(--ink2);font-size:14px;padding:6px 10px;border-radius:6px}
+.nav-links a:hover{background:var(--wash);color:var(--ink)}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;padding:2px;background:var(--surface);flex:none}
+.seg button{font:inherit;font-size:13px;font-weight:550;border:0;background:none;color:var(--ink2);padding:4px 10px;border-radius:6px;cursor:pointer}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.seg button:focus-visible,.th-btn:focus-visible,.nav-links a:focus-visible{outline:2px solid var(--series);outline-offset:2px}
+
+/* sections & cards */
+section{padding:34px 0 6px;scroll-margin-top:52px}
+.sec-head{margin-bottom:14px}
+.sec-head h2{font-size:21px;font-weight:650;letter-spacing:-.005em}
+.sec-head p{margin:4px 0 0;color:var(--ink2);max-width:76ch}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px}
+.card h3{font-size:15px;font-weight:650}
+.card .sub{color:var(--ink2);font-size:13.5px;margin:2px 0 12px}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g-chart{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:900px){.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.g3,.g-chart{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:640px){.g2{grid-template-columns:minmax(0,1fr)}.mast h1{font-size:26px}.card{padding:16px}}
+
+/* stat tiles */
+.tile .label{font-size:13.5px;color:var(--ink2)}
+.tile .value{font-size:30px;font-weight:650;line-height:1.2;margin-top:4px;letter-spacing:-.01em}
+.tile .foot{font-size:13px;color:var(--muted);margin-top:6px}
+.delta{font-weight:600}
+.delta.up{color:var(--good)} .delta.down{color:var(--bad)}
+.facts{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0;margin:14px 0 0;padding:6px 20px}
+.facts div{padding:12px 16px;border-left:1px solid var(--grid)}
+.facts div:first-child{border-left:0;padding-left:0}
+.facts dt{font-size:12.5px;color:var(--ink2)}
+.facts dd{margin:2px 0 0;font-size:17px;font-weight:600}
+.facts small{display:block;font-size:12px;color:var(--muted);font-weight:400}
+@media (max-width:900px){.facts{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:6px}.facts div:nth-child(3n+1){border-left:0;padding-left:0}}
+@media (max-width:520px){.facts{grid-template-columns:repeat(2,minmax(0,1fr))}.facts div{border-left:0;padding-left:0}}
+
+/* tables */
+.tbl-wrap{overflow-x:auto;margin:0 -4px;padding:0 4px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--grid);vertical-align:middle}
+thead th{font-size:12.5px;font-weight:600;color:var(--ink2);white-space:nowrap;border-bottom-color:var(--axis)}
+tbody tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td .minor{display:block;color:var(--muted);font-size:12.5px}
+.th-btn{font:inherit;font-weight:600;color:inherit;background:none;border:0;padding:0;min-height:24px;cursor:pointer;display:inline-flex;gap:4px;align-items:center}
+.th-btn .arrow{font-size:10px;color:var(--muted);width:8px}
+tr.clickable{cursor:pointer}
+tr.clickable:hover td{background:var(--wash)}
+tr.clickable:focus-visible{outline:2px solid var(--series);outline-offset:-2px}
+tr.is-rabat td{background:color-mix(in srgb,var(--series) 9%,transparent)}
+tr.total td{font-weight:650;border-top:1px solid var(--axis)}
+.inbar{display:flex;align-items:center;gap:8px;min-width:230px}
+.inbar .fill{height:10px;background:var(--series);border-radius:0 4px 4px 0}
+.inbar .v{font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* bar lists */
+.bl-row{display:grid;grid-template-columns:minmax(0,44%) 1fr 42px;gap:10px;align-items:center;padding:5px 0;font-size:14px}
+.bl-label{color:var(--ink2);line-height:1.25}
+#metric,#bed-filter{flex:0 1 auto;max-width:100%;flex-wrap:wrap}
+@media (max-width:1100px){.g2.stack-early{grid-template-columns:minmax(0,1fr)}}
+#tbl-listings td:first-child{min-width:200px}
+.bl-fill{height:10px;background:var(--series);border-radius:0 4px 4px 0;min-width:2px}
+.bl-val{text-align:right;font-variant-numeric:tabular-nums}
+
+/* charts */
+.chart{position:relative;min-height:250px}
+.chart svg{display:block;overflow:visible}
+.chart .grid{stroke:var(--grid);stroke-width:1}
+.chart .axis{stroke:var(--axis);stroke-width:1}
+.chart .tick{fill:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.chart .dlabel{fill:var(--ink);font-size:12.5px;font-weight:600}
+.chart .line{fill:none;stroke:var(--series);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.chart .dot{fill:var(--series);stroke:var(--surface);stroke-width:2}
+.chart .bar{fill:var(--series)}
+.chart .bar.dim{opacity:.45}
+.chart .xhair{stroke:var(--axis);stroke-width:1}
+.chart .hit{fill:transparent}
+.tip{position:absolute;pointer-events:none;background:var(--tip-bg);color:var(--tip-ink);font-size:13px;line-height:1.35;padding:7px 10px;border-radius:7px;white-space:nowrap;z-index:5;transform:translate(-50%,-100%)}
+.tip[hidden]{display:none}
+.tip b{font-weight:650}
+.spread svg{display:block}
+details.table-view{margin-top:10px;font-size:13.5px}
+details.table-view summary{cursor:pointer;color:var(--ink2);width:max-content}
+details.table-view table{margin-top:8px;font-size:13.5px}
+.note{font-size:13px;color:var(--muted);margin:12px 0 0}
+.note.warn{color:var(--ink2);border-left:3px solid var(--axis);padding-left:10px}
+
+/* calculator */
+.calc{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:24px}
+@media (max-width:820px){.calc{grid-template-columns:minmax(0,1fr)}}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:13px;color:var(--ink2);margin-bottom:4px}
+.field select,.field input{width:100%;font:inherit;padding:8px 10px;border-radius:8px;border:1px solid var(--axis);background:var(--page);color:var(--ink)}
+.field select:focus-visible,.field input:focus-visible{outline:2px solid var(--series);outline-offset:1px}
+.yields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}
+.yields .y{background:var(--wash);border-radius:10px;padding:12px 14px}
+.yields .y .label{font-size:12.5px;color:var(--ink2)}
+.yields .y .value{font-size:24px;font-weight:650}
+
+/* map */
+#map,#lmap{height:540px;border-radius:10px;border:1px solid var(--border);background:#e8e6df;z-index:0}
+@media (max-width:640px){#map,#lmap{height:400px}}
+.leaflet-popup-content a{color:#1c5cab;display:inline-block;margin-top:8px}
+.calstrip{display:flex;gap:1px;margin-top:10px}
+.calstrip i{flex:1;height:10px;background:#e1e0d9;border-radius:1px}
+.calstrip i.t{background:#1c5cab}
+.seg[hidden]{display:none}
+.setup ol{margin:8px 0 0;padding-left:20px;color:var(--ink2)}
+.setup li{margin:6px 0;max-width:80ch}
+code{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--wash);padding:1px 5px;border-radius:4px}
+.more-btn{font:inherit;font-size:13.5px;margin-top:12px;padding:6px 12px;border-radius:8px;border:1px solid var(--axis);background:var(--surface);color:var(--ink);cursor:pointer}
+.more-btn:hover{background:var(--wash)}
+.map-bar{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--ink2);margin-top:12px;align-items:center}
+.legend .sw{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:-1px;border:2px solid #fff;box-shadow:0 0 0 1px rgba(11,11,11,.15)}
+.leaflet-container{font:inherit}
+.leaflet-popup-content{margin:12px 14px;color:#0b0b0b;font-size:13.5px;line-height:1.45}
+.leaflet-popup-content b{font-size:15px}
+.leaflet-popup-content .r{color:#52514e;font-size:12.5px;margin-bottom:6px}
+.leaflet-popup-content table{font-size:13.5px}
+.leaflet-popup-content td{padding:2px 0;border:0;color:#0b0b0b}
+.leaflet-popup-content td:first-child{color:#52514e;padding-right:14px}
+.mk-label{background:#0b0b0b;color:#fff;border:0;border-radius:5px;padding:2px 7px;font-weight:600;font-size:12.5px;box-shadow:none}
+.mk-label::before{display:none}
+
+footer{margin-top:44px;padding:26px 0 60px;border-top:1px solid var(--border);color:var(--ink2);font-size:13.5px}
+footer h2{font-size:15px;color:var(--ink);margin-bottom:8px}
+footer ul{margin:0;padding-left:18px}
+footer li{margin:5px 0;max-width:92ch}
+.locked .mast,.locked .nav,.locked main,.locked footer{display:none}
+.gate{min-height:100vh;display:grid;place-items:center;padding:24px 16px}
+.gate[hidden]{display:none}
+.gate-card{width:min(420px,100%);display:grid;gap:10px}
+.gate-card h1{font-size:26px;font-weight:650}
+.gate-card p{margin:0;color:var(--ink2)}
+.gate-card label{font-size:13px;color:var(--ink2);margin-top:6px}
+.gate-card input[type=password]{font:inherit;padding:10px 12px;border-radius:8px;border:1px solid var(--axis);background:var(--page);color:var(--ink)}
+.gate-card input[type=password]:focus-visible,.gate-card button:focus-visible{outline:2px solid var(--series);outline-offset:1px}
+.gate-remember{display:flex;gap:8px;align-items:center}
+.gate-card button[type=submit]{font:inherit;font-weight:600;padding:10px 14px;border-radius:8px;border:0;background:var(--ink);color:var(--surface);cursor:pointer;margin-top:6px}
+.gate-card button[disabled]{opacity:.6;cursor:default}
+.gate-msg{min-height:1.4em;font-size:13.5px}
+</style>
+</head>
+<body>
+
+<div class="gate" id="gate">
+  <form class="card gate-card" id="gate-form">
+    <div class="eyebrow">Morocco · short-term rentals</div>
+    <h1>Morocco STR Atlas</h1>
+    <p>This page is private. Enter the passphrase to open it.</p>
+    <label for="gate-pass">Passphrase</label>
+    <input id="gate-pass" type="password" autocomplete="current-password" autocapitalize="none" spellcheck="false" required>
+    <label class="gate-remember"><input id="gate-remember" type="checkbox" checked> Remember on this device</label>
+    <button type="submit" id="gate-go">Open</button>
+    <p class="gate-msg" id="gate-msg" role="alert"></p>
+  </form>
+</div>
+
+<header class="mast">
+  <div class="wrap">
+    <div class="eyebrow">Morocco · short-term rentals</div>
+    <h1>Rabat Airbnb market</h1>
+    <p id="mast-dek"></p>
+  </div>
+</header>
+
+<div class="nav">
+  <div class="wrap">
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#overview">Overview</a><a href="#trends">Trends</a><a href="#spread">Spread</a>
+      <a href="#size">By size</a><a href="#calc">Calculator</a><a href="#supply">Supply</a>
+      <a href="#guests">Guests</a><a href="#top">Top earners</a><a href="#listings">Listings</a><a href="#morocco">Morocco</a>
+    </nav>
+    <div class="seg" id="cur" role="group" aria-label="Currency"></div>
+  </div>
+</div>
+
+<main class="wrap">
+
+<section id="overview">
+  <div class="grid g4" id="kpis"></div>
+  <dl class="facts card" id="facts"></dl>
+  <div class="card" style="margin-top:14px">
+    <h3>Two sources, two answers</h3>
+    <p class="sub">Airbtics and AirROI both model Rabat from public Airbnb calendars, and they do not agree. Every other figure on this page is AirROI's, the lower of the two.</p>
+    <div class="tbl-wrap"><table id="xcheck"></table></div>
+    <p class="note warn">These are modelled estimates, not audited bookings. The gap between the two sources is a fair measure of how uncertain they are.</p>
+  </div>
+</section>
+
+<section id="trends">
+  <div class="sec-head"><h2>Month by month</h2><p id="trends-dek"></p></div>
+  <div class="grid g-chart">
+    <div class="card">
+      <div style="display:flex;flex-wrap:wrap;gap:8px 14px;justify-content:space-between;align-items:flex-start">
+        <div><h3>Last 12 months</h3><p class="sub" id="metric-sub"></p></div>
+        <div class="seg" id="metric" role="group" aria-label="Metric"></div>
+      </div>
+      <div class="chart" id="chart-monthly"></div>
+      <details class="table-view"><summary>Show as table</summary><div class="tbl-wrap"><table id="tbl-monthly"></table></div></details>
+    </div>
+    <div class="card">
+      <h3>A typical year</h3>
+      <p class="sub">Revenue per active listing by calendar month, averaged over two years</p>
+      <div class="chart" id="chart-season"></div>
+      <div class="tbl-wrap"><table id="tbl-seasons" style="margin-top:6px"></table></div>
+    </div>
+  </div>
+</section>
+
+<section id="spread">
+  <div class="sec-head"><h2>Earnings spread</h2><p id="spread-dek"></p></div>
+  <div class="card"><div class="tbl-wrap"><table id="tbl-spread" class="spread"></table></div>
+    <p class="note">Monthly revenue counts only listings active in that month, so twelve times the median runs above the annual average, which also includes part-year listings.</p></div>
+</section>
+
+<section id="size">
+  <div class="sec-head"><h2>By home size</h2><p id="size-dek"></p></div>
+  <div class="card"><div class="tbl-wrap"><table id="tbl-beds"></table></div>
+    <p class="note">Entire homes with a bedroom count on file (1,750 of 2,030 listings). Four- and five-bedroom rows rest on 27 and 16 listings.</p></div>
+</section>
+
+<section id="calc">
+  <div class="sec-head"><h2>Yield calculator</h2><p>Start from what a Rabat home of a given size grosses, take off running costs, and compare what is left with a purchase price.</p></div>
+  <div class="card calc">
+    <div>
+      <div class="field"><label for="c-size">Home size</label><select id="c-size"></select></div>
+      <div class="field"><label for="c-basis">Gross bookings</label>
+        <select id="c-basis"><option value="median">Median listing of this size</option><option value="avg">Average listing of this size</option><option value="custom">My own estimate</option></select></div>
+      <div class="field" id="c-custom-wrap" hidden><label for="c-custom">Gross bookings per year (<span class="cur-code"></span>)</label><input id="c-custom" type="number" min="0" step="1000" inputmode="numeric"></div>
+      <div class="field"><label for="c-mgmt">Who runs it</label>
+        <select id="c-mgmt"><option value="0">You run it (no management fee)</option><option value="0.10">Co-host at 10% of nightly bookings</option><option value="0.20">Full management at 20%</option></select></div>
+      <div class="field"><label for="c-price">Purchase price (<span class="cur-code"></span>), optional</label><input id="c-price" type="number" min="0" step="10000" inputmode="numeric" placeholder="Enter a price to see yield"></div>
+    </div>
+    <div>
+      <div class="tbl-wrap"><table id="c-ledger"></table></div>
+      <div class="yields" id="c-yields"></div>
+      <p class="note">Cost shares are AirROI's model for a self-run Rabat listing. Not included: furnishing, purchase costs, mortgage or rent, building fees, and income tax. An estimate to compare options with, not a forecast.</p>
+    </div>
+  </div>
+</section>
+
+<section id="supply">
+  <div class="sec-head"><h2>What is on the market</h2><p id="supply-dek"></p></div>
+  <div class="grid g3">
+    <div class="card"><h3>Property type</h3><p class="sub">Share of listings</p><div id="bl-prop"></div></div>
+    <div class="card"><h3>Guest capacity</h3><p class="sub">Share of listings with a capacity on file</p><div id="bl-cap"></div></div>
+    <div class="card"><h3>Minimum stay</h3><p class="sub">Shortest stay a listing accepts</p><div id="bl-min"></div></div>
+    <div class="card"><h3>Nights booked or blocked per year</h3><p class="sub">Share of listings</p><div id="bl-booked"></div></div>
+    <div class="card"><h3>Cancellation policy</h3><p class="sub">Share of listings</p><div id="bl-cancel"></div></div>
+    <div class="card"><h3>Common amenities</h3><p class="sub">Share of listings; wifi is near-universal</p><div id="bl-amen"></div></div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <h3>Amenities that come with higher revenue</h3>
+    <p class="sub">Average annual revenue of listings with and without each amenity</p>
+    <div class="tbl-wrap"><table id="tbl-amen"></table></div>
+    <p class="note">Bigger, professionally run homes carry more amenities, so the gap reflects the kind of listing as much as the feature.</p>
+  </div>
+</section>
+
+<section id="guests">
+  <div class="sec-head"><h2>Who books</h2><p id="guests-dek"></p></div>
+  <div class="grid g3">
+    <div class="card"><h3>Where guests live</h3><p class="sub">Share of guests who left reviews</p><div id="bl-country"></div></div>
+    <div class="card"><h3>Languages</h3><p class="sub">Share of guests who left reviews</p><div id="bl-lang"></div></div>
+    <div class="card"><h3>Ratings by category</h3><p class="sub">Average out of 5; bars start at 4.0</p><div id="bl-rate"></div></div>
+  </div>
+</section>
+
+<section id="top">
+  <div class="sec-head"><h2>Top earners</h2><p id="top-dek"></p></div>
+  <div class="grid g2 stack-early">
+    <div class="card"><h3>Top-grossing listings</h3><p class="sub">Past 12 months</p><div class="tbl-wrap"><table id="tbl-listings"></table></div></div>
+    <div class="card"><h3>Top hosts by revenue</h3><p class="sub">The ten largest run about 10% of listings</p><div class="tbl-wrap"><table id="tbl-hosts"></table></div></div>
+  </div>
+  <p class="note" id="atlas-note"></p>
+</section>
+
+<section id="listings">
+  <div class="sec-head"><h2>Rabat listings</h2><p id="listings-dek"></p></div>
+  <div class="card setup" id="listings-setup" hidden></div>
+  <div class="card" id="listings-card" hidden>
+    <div class="map-bar">
+      <div style="display:flex;flex-wrap:wrap;gap:8px"><div class="seg" id="bed-filter" role="group" aria-label="Bedrooms"></div><div class="seg" id="rev-filter" role="group" aria-label="Reviews"></div><div class="seg" id="color-by" role="group" aria-label="Pin colour" hidden></div></div>
+      <div id="listings-summary" style="font-size:13.5px;color:var(--ink2)"></div>
+    </div>
+    <div id="lmap"></div>
+    <div class="legend" id="llegend"></div>
+    <div class="tbl-wrap" style="margin-top:16px"><table id="tbl-props"></table></div>
+    <div id="props-more"></div>
+    <p class="note" id="listings-note"></p>
+  </div>
+</section>
+
+<section id="morocco">
+  <div class="sec-head"><h2>Rabat against the rest of Morocco</h2><p id="morocco-dek"></p></div>
+  <div class="card">
+    <div class="map-bar">
+      <div class="seg" id="map-view" role="group" aria-label="Map view"></div>
+      <div class="seg" id="mk-filter" role="group" aria-label="Markets shown in table"></div>
+    </div>
+    <div id="map"></div>
+    <div class="legend" id="legend"></div>
+    <div class="tbl-wrap" style="margin-top:16px"><table id="tbl-markets"></table></div>
+    <p class="note">Select a row to find the market on the map. "Slow month" is the weakest month's revenue as a share of the best, so higher means steadier income. Map positions are approximate town centres.</p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <h2>About the data</h2>
+    <ul id="about"></ul>
+  </div>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script src="gate.js"></script>
+</body>
+</html>
