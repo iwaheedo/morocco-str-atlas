@@ -1,3 +1,3 @@
 # Morocco STR Atlas
 
-A private dashboard. The page asks for a passphrase; its data is stored encrypted in `vault.json`.
+A dashboard of the Rabat and wider Morocco short-term rental market. Figures are estimates from public sources; see the notes at the foot of the page.
