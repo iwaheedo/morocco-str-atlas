@@ -299,6 +299,48 @@ function renderTop(){
   $('#atlas-note').textContent = `These are the top earners as measured by AirROI. The map at the top of the page has ${LS ? nf0.format(LS.items.filter(l => l.city === state.mcity).length) : 'the'} ${state.mcity} listings, each with its own estimated revenue and occupancy.`;
 }
 
+/* ---------- After 2030: the rail line and the World Cup ---------- */
+// What the research found for each city (21 Nov 2026). The numbers themselves come from listings.js.
+const FUT_TEXT = {
+  'Rabat': ['Rabat-Agdal becomes a stop on the Kenitra–Marrakesh high-speed line: Marrakesh in about 1h40 (about 3h45 today) and Casablanca airport in about 35 minutes.',
+    'The rebuilt Prince Moulay Abdellah stadium (about 68,700 seats, opened September 2025) brings recurring events. Over the Africa Cup of Nations (December 2025 to January 2026) classified-hotel nights in Rabat were 42% up on a year earlier.',
+    'Risks: supply is growing fastest here (AirDNA: listings up 22.5% in the year to July 2026), and a city this close to Casablanca can lose overnight stays to day trips.',
+    'Most likely to gain: Agdal, Hassan and the Medina. Hay Riad near the stadium gains on event nights only.'],
+  'Salé': ['No World Cup stadium. A station is being built at Rabat-Salé airport on the new line, but whether high-speed trains will stop there has not been confirmed.',
+    'A planned commuter line (Kenitra to Skhirat, a train every 15 minutes or so) and the tram tie Salé more closely to Rabat; budget visitors used rentals in Salé during the Africa Cup.',
+    'Risk: the government said in January 2026 it is preparing a decree to limit short lets in non-tourist zones. No text has been published.',
+    'Most likely to gain: around Salé-Ville and Tabriquet stations and the medina.'],
+  'Kenitra': ['Already a stop on the existing high-speed line. The new line starts here, so the gain is through trains south to Marrakesh; no official Kenitra–Marrakesh time has been published.',
+    'No World Cup stadium. Kenitra is an overflow market for Rabat events, helped by the planned commuter line.',
+    'Most likely to gain: within about a kilometre of the station.'],
+  'Tangier': ['On the high-speed line since November 2018. In 2019 hotel nights rose 8% and hotel occupancy 4 points, but nights had grown 8% the year before the line too, so its own effect is unclear.',
+    'The new line adds direct trains to Marrakesh in about 2h40. The Grand Stade de Tanger holds about 75,600 after its rebuild (reopened November 2025), and the airport is being enlarged from 2 to 7 million passengers a year.',
+    'Most likely to gain: Malabata, the corniche and the centre near Tanger-Ville station. The stadium area gains on event nights only.'],
+  'Marrakesh': ['The end of the new line: Casablanca in about 1h15 (about 2h40 today), Rabat in 1h40 and Tangier in 2h40. The existing station in Guéliz is being rebuilt as the high-speed stop.',
+    'The Grand Stade de Marrakech (about 46,000 seats) is closed for renovation and sits about 11 km north of the centre. The airport is being enlarged from 8 to 16 million passengers a year.',
+    'Risks: the market is already filling up (AirDNA, July 2026: 12,311 listings, revenue per listing down 0.9%), and a 1h15 train makes day trips from Casablanca easy.',
+    'Most likely to gain: Guéliz and Hivernage near the station, and the Medina. The stadium area gains on event nights only.']
+};
+function renderFuture(){
+  const F = LS && LS.meta.future, fc = F && F.cities[state.mcity], sec = $('#future');
+  sec.hidden = !fc; $('#nav-future').hidden = !fc;
+  if (!fc) return;
+  const revAt = v => K.revenue * v / K.occupancy; // same nightly rate and open nights, so revenue moves with occupancy
+  $('#fut-dek').textContent = `A scenario, not a forecast, for the years after the Kenitra–Marrakesh high-speed line opens (due late 2029) and the 2030 World Cup. The published evidence points to a small gain, not a boom: new rail lines add little to overnight stays, a World Cup leaves little lasting demand, and new listings can outrun both.`;
+  const tiles = [
+    { label: 'Occupancy change, most likely', value: pts(fc.central), foot: `from ${pts(fc.low)} to ${pts(fc.high)}` },
+    { label: 'Average occupancy', value: `${trim(K.occupancy, 1)}% → ${trim(K.occupancy + fc.central, 1)}%`, foot: `today → after 2030; between ${trim(K.occupancy + fc.low, 1)}% and ${trim(K.occupancy + fc.high, 1)}%` },
+    { label: 'Revenue per listing, a year', value: (fc.central > 0 ? '+' : '') + money(revAt(fc.central)), foot: `at today's nightly rate; from −${money(-revAt(fc.low))} to +${money(revAt(fc.high))}` },
+    { label: 'When', value: 'Late 2029', foot: 'line due to open; World Cup June to July 2030' }
+  ];
+  $('#fut-kpis').innerHTML = tiles.map(t => `<div class="card tile"><div class="label">${t.label}</div><div class="value fut">${t.value}</div><div class="foot">${t.foot}</div></div>`).join('');
+  $('#fut-city').textContent = state.mcity;
+  $('#fut-facts').innerHTML = (FUT_TEXT[state.mcity] || []).map(t => `<li>${esc(t)}</li>`).join('');
+  $('#tbl-future').innerHTML = '<thead><tr><th>City</th><th class="num">Occupancy today</th><th class="num">Low</th><th class="num">Most likely</th><th class="num">High</th><th>Where the gain gathers</th></tr></thead><tbody>' +
+    Object.keys(F.cities).map(c => { const v = F.cities[c], k = MK[c] ? MK[c].kpi : null;
+      return `<tr${c === state.mcity ? ' class="is-rabat"' : ''}><td>${esc(c)}</td><td class="num">${k ? trim(k.occupancy, 1) + '%' : '–'}</td><td class="num">${pts(v.low)}</td><td class="num fut"><b>${pts(v.central)}</b></td><td class="num">${pts(v.high)}</td><td>${esc(v.anchors.map(a => a.name).join('; '))}${v.stadium ? '<span class="minor">' + esc(v.stadium.name) + ': event nights only</span>' : ''}</td></tr>`; }).join('') + '</tbody>';
+}
+
 /* ---------- Morocco map + table ---------- */
 // Revenue bands are set in the display currency so the legend reads in round numbers.
 const BINS_BY_CUR = { GBP: [4000, 6000, 8000], MAD: [50000, 75000, 100000], EUR: [4500, 7000, 9000], USD: [5000, 7500, 10000] };
@@ -431,14 +473,14 @@ function focusMarket(name){
 // listings.js carries text written by strangers (anyone can name a listing anything), so none of it is
 // trusted: every field is forced to its expected type here, and strings are escaped again where shown.
 // The cities on the map: where to centre each one, and its name in the market table further down.
-const CITY_VIEW = { 'Rabat': [34.0, -6.85, 13], 'Salé': [34.045, -6.765, 13], 'Kenitra': [34.262, -6.585, 13], 'Tangier': [35.768, -5.825, 13] };
+const CITY_VIEW = { 'Rabat': [34.0, -6.85, 13], 'Salé': [34.045, -6.765, 13], 'Kenitra': [34.262, -6.585, 13], 'Tangier': [35.768, -5.825, 13], 'Marrakesh': [31.63, -8.0, 13] };
 const isCity = c => typeof c === 'string' && Object.prototype.hasOwnProperty.call(CITY_VIEW, c);
 function cleanListings(raw){
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.items)) return null;
   const num = v => typeof v === 'number' && isFinite(v) ? v : null;
   const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : null;
   const day = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
-  const NUMS = ['lat', 'lng', 'bedrooms', 'beds', 'baths', 'guests', 'rating', 'reviews', 'adr', 'rev', 'potMonth', 'profitMonth', 'profitEst', 'occ', 'since', 'availDays', 'bookedDays', 'calNights', 'calTaken', 'calOcc'];
+  const NUMS = ['lat', 'lng', 'bedrooms', 'beds', 'baths', 'guests', 'rating', 'reviews', 'adr', 'rev', 'potMonth', 'profitMonth', 'profitEst', 'occUp', 'occUpHigh', 'revUp', 'hub', 'hubKm', 'stadiumKm', 'occ', 'since', 'availDays', 'bookedDays', 'calNights', 'calTaken', 'calOcc'];
   const seen = Object.create(null), items = [];
   raw.items.forEach(l => {
     if (!l || typeof l !== 'object') return;
@@ -453,6 +495,19 @@ function cleanListings(raw){
   });
   if (!items.length) return null;
   const m = raw.meta && typeof raw.meta === 'object' ? raw.meta : {};
+  // The 2030 scenario: each city's range and the places the gain gathers around. Numbers and short names only.
+  const future = (() => {
+    const f = m.future; if (!f || typeof f !== 'object' || !f.cities || typeof f.cities !== 'object') return null;
+    const pt = v => v && typeof v === 'object' && num(v.lat) !== null && num(v.lng) !== null ? { name: str(v.name, 80) || '', lat: v.lat, lng: v.lng } : null;
+    const o = { nearKm: num(f.nearKm), farKm: num(f.farKm), stadiumKm: num(f.stadiumKm), cities: Object.create(null) };
+    if (!(o.nearKm > 0) || !(o.farKm > o.nearKm) || !(o.stadiumKm > 0)) return null;
+    Object.keys(CITY_VIEW).forEach(c => {
+      const v = Object.prototype.hasOwnProperty.call(f.cities, c) ? f.cities[c] : null;
+      if (!v || typeof v !== 'object' || num(v.low) === null || num(v.central) === null || num(v.high) === null || !(v.low <= v.central && v.central <= v.high)) return;
+      o.cities[c] = { low: v.low, central: v.central, high: v.high, anchors: (Array.isArray(v.anchors) ? v.anchors : []).slice(0, 6).map(pt).filter(Boolean), stadium: pt(v.stadium) };
+    });
+    return Object.keys(o.cities).length ? o : null;
+  })();
   // The running-cost assumptions behind the profit figures: every one must be a sensible number, or none is used.
   const costs = (() => {
     const c = m.costs, o = { surface: {} };
@@ -463,7 +518,7 @@ function cleanListings(raw){
   })();
   return { items: items, meta: { source: m.source === 'airbnb' ? 'airbnb' : 'airroi', pulledAt: day(m.pulledAt),
     currency: ['GBP', 'MAD', 'EUR', 'USD'].indexOf(m.currency) >= 0 ? m.currency : 'MAD',
-    totalInMarket: num(m.totalInMarket), sort: str(m.sort, 40), calFrom: day(m.calFrom), calTo: day(m.calTo), calCount: num(m.calCount), costs: costs,
+    totalInMarket: num(m.totalInMarket), sort: str(m.sort, 40), calFrom: day(m.calFrom), calTo: day(m.calTo), calCount: num(m.calCount), costs: costs, future: future,
     cities: Object.keys(CITY_VIEW).reduce((acc, c) => { const v = m.cities && typeof m.cities === 'object' && m.cities[c] && typeof m.cities[c] === 'object' ? m.cities[c] : {};
       acc[c] = { openNights: num(v.openNights), topQuarterOcc: num(v.topQuarterOcc) }; return acc; }, {}) } };
 }
@@ -474,8 +529,8 @@ const AB = !!LS && LS.meta.source === 'airbnb';
 const CITIES = LS ? Object.keys(CITY_VIEW).filter(c => LS.items.some(l => l.city === c)) : [];
 const MULTI = CITIES.length > 1;
 const GREY = '#c3c2b7';
-const lstate = { beds: 'any', show: 'all', sort: 'rev', page: 0, per: 12, hold: false, city: 'Rabat', only: null };
-let lmap = null, dotLayer = null, pinLayer = null, pins = Object.create(null);
+const lstate = { beds: 'any', show: 'all', sort: 'rev', page: 0, per: 12, hold: false, city: 'Rabat', only: null, dots: 'occ' };
+let lmap = null, dotLayer = null, hubLayer = null, pinLayer = null, pins = Object.create(null);
 const lmarkers = Object.create(null), byId = Object.create(null), saved = Object.create(null);
 try { (JSON.parse(localStorage.getItem('str-saved') || '[]') || []).forEach(id => { if (typeof id === 'string') saved[id] = 1; }); } catch (e) {}
 // Dates in the file are plain calendar days; read them as local midnight so they do not shift by time zone.
@@ -516,10 +571,20 @@ function takeHome(rev, l){
   return { fees: rev * (c.platform + c.manager), upkeep: rev * c.upkeep, fixed: fixed, maTax: rev * (c.localTax + c.incomeTax), home: home, net: beforeTax - incomeTax - home };
 }
 const lSigned = v => v == null ? '–' : v < 0 ? '−' + lMoney(-v) : lMoney(v);
+// The 2030 scenario has its own colour everywhere it appears, so it is never read as a figure for today.
+const FUT = ['#d8cbf6', '#b497ee', '#8a63e0', '#5a2fc2'];
+const futBin = v => v < 0.5 ? 0 : v < 1 ? 1 : v < 1.5 ? 2 : 3;
+const pts = v => v == null ? '–' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + ' pts';
+const plusMoney = v => v == null ? '–' : (v > 0 ? '+' : '') + lSigned(v);
+const futCity = c => LS && LS.meta.future && LS.meta.future.cities[c] || null;
+// Dots shrink and lose their white edge as the map zooms out, so a dense city stays readable.
+const dotSize = () => { const z = lmap ? lmap.getZoom() : 13; return z <= 11 ? { radius: 2.4, weight: 0 } : z === 12 ? { radius: 3.2, weight: 0.4 } : z === 13 ? { radius: 4.2, weight: 0.8 } : { radius: 5, weight: 1.2 }; };
+const dotColor = l => lstate.dots === 'up' ? (l.occUp == null ? GREY : FUT[futBin(l.occUp)]) : occColor(l);
 function figures(l){
   return {
     pot: l.potMonth != null ? lMoney(l.potMonth) : '–',
     profit: lSigned(l.profitMonth), profitEst: lSigned(l.profitEst),
+    up: pts(l.occUp), revUp: plusMoney(l.revUp),
     open: AB ? (l.calNights != null && l.calTaken != null ? (l.calNights - l.calTaken) + ' of ' + l.calNights : '–') : (l.availDays != null ? nf0.format(l.availDays) : '–'),
     rev: l.rev != null ? lMoney(l.rev) : '–',
     occ: l.occ != null ? Math.round(l.occ) + '%' : '–',
@@ -535,6 +600,7 @@ function cardHtml(l){
     `<p class="lc-name">${MULTI ? esc(l.city) + ' · ' : ''}${esc(l.name || 'Listing')}</p>` +
     `<div class="lc-row two"><div class="m"><b>${f.pot}</b><span>Revenue potential, a month</span></div><div class="m"><b>${f.profit}</b><span>Potential profit, a month</span></div></div>` +
     `<div class="lc-row three"><div class="m key"><b>${f.rev}</b><span>Revenue, a year${EST}</span></div><div class="m key"><b>${f.occ}</b><span>Occupancy rate${EST}</span></div><div class="m key"><b>${f.adr}</b><span>Daily rate</span></div></div>` +
+    (l.occUp != null ? `<div class="lc-row two future"><div class="m"><b>${f.up}</b><span>Potential increase in occupancy, from 2030${l.occ != null ? ' (' + Math.round(l.occ) + '% → ' + trim(Math.min(100, l.occ + l.occUp), 1) + '%)' : ''}</span></div><div class="m"><b>${f.revUp}</b><span>Revenue increase, a year</span></div></div>` : '') +
     (l.priceOdd ? '<p class="lc-why">The rate is far above others of its size in this city, so no revenue is worked out from it.</p>' : AB && l.occ == null ? '<p class="lc-why">Too few reviews to estimate revenue or occupancy.</p>' : '') +
     (f.open !== '–' ? `<p class="lc-why">${OPEN_LABEL}: ${f.open}</p>` : '') +
     `<div class="lc-actions">${airbnbLink(l, 'btn')}<button type="button" class="btn ghost" data-save="${esc(l.id)}" aria-pressed="${!!saved[l.id]}">${saved[l.id] ? '♥ Saved' : '♡ Save'}</button></div></article>`;
@@ -543,11 +609,14 @@ function lPopup(l){
   const f = figures(l), since = l.since ? ' · listed ' + Math.floor(l.since) : '';
   const rows = [['Revenue, a year' + (AB ? ' (est.)' : ''), f.rev], ['Occupancy rate' + (AB ? ' (est.)' : ''), f.occ],
     ['Daily rate', f.adr + (l.priceDate ? ' <span style="color:#52514e">on ' + shortDate(l.priceDate) + '</span>' : '')], ['Revenue potential, a month', f.pot], ['Potential profit, a month', f.profit]].concat(l.profitEst != null ? [['Profit on its estimated bookings, a month', f.profitEst]] : [], [[OPEN_LABEL, f.open]]);
-  const t = takeHome(l.potMonth, l);
+  const t = takeHome(l.potMonth, l), fc = futCity(l.city);
+  if (l.occUp != null && fc) rows.push(['<span class="fut">Occupancy from 2030, scenario</span>', `<span class="fut">${l.occ != null ? trim(Math.min(100, l.occ + l.occUp), 1) + '% · ' : ''}${pts(l.occUp)}</span>`], ['<span class="fut">Revenue increase, a year</span>', `<span class="fut">${f.revUp}</span>`]);
+  const hub = fc && l.hub != null ? fc.anchors[l.hub] : null;
+  const futLine = l.occUp != null && fc ? `<div class="r fut" style="margin:6px 0 0">2030 scenario for this listing: from ${pts(fc.low)} to ${pts(l.occUpHigh)}, most likely ${pts(l.occUp)}.${hub && l.hubKm != null ? ' ' + l.hubKm.toFixed(1) + ' km from ' + esc(hub.name) + '.' : ''}${l.stadiumKm != null && fc.stadium ? ' ' + l.stadiumKm.toFixed(1) + ' km from ' + esc(fc.stadium.name) + ' (event nights).' : ''}</div>` : '';
   const tags = [l.fav ? 'Guest favourite' : null, l.superhost ? 'Superhost' : null, l.exact === false ? 'approximate location' : null].filter(Boolean).join(' · ');
   return `<b>${esc(l.name || 'Listing')}</b><div class="r">${MULTI ? esc(l.city) + ' · ' : ''}${esc(kind(l))} · ${esc(stars(l))}${since}${tags ? ' · ' + tags : ''}</div><table>` +
     rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('') + '</table>' +
-    (t && l.profitMonth != null ? `<div class="r" style="margin:6px 0 0">Potential profit: ${lMoney(l.potMonth)} revenue − ${lMoney(t.fees)} Airbnb fee and manager − ${lMoney(t.upkeep)} upkeep − ${lMoney(t.fixed)} bills and service charge − ${lMoney(t.maTax)} Moroccan tax − ${lMoney(t.home)} UK tax. No mortgage.</div>` : '') +
+    (t && l.profitMonth != null ? `<div class="r" style="margin:6px 0 0">Potential profit: ${lMoney(l.potMonth)} revenue − ${lMoney(t.fees)} Airbnb fee and manager − ${lMoney(t.upkeep)} upkeep − ${lMoney(t.fixed)} bills and service charge − ${lMoney(t.maTax)} Moroccan tax − ${lMoney(t.home)} UK tax. No mortgage.</div>` : '') + futLine +
     (l.cal && LS.meta.calFrom && LS.meta.calTo ? `<div class="calstrip" role="img" aria-label="Nights taken and free, ${shortDate(LS.meta.calFrom)} to ${shortDate(LS.meta.calTo)}">${l.cal.split('').map(ch => `<i class="${ch === 'a' ? '' : 't'}"></i>`).join('')}</div><div class="r" style="margin:3px 0 0">${shortDate(LS.meta.calFrom)} to ${shortDate(LS.meta.calTo)} · dark = taken</div>` : '') +
     airbnbLink(l, '');
 }
@@ -579,8 +648,22 @@ function openListing(id){
 function syncDots(){
   if (!dotLayer) return;
   dotLayer.clearLayers();
-  LS.items.filter(l => cityMatch(l) && bedMatch(l) && showMatch(l)).sort((a, b) => (a.occ == null ? -1 : a.occ) - (b.occ == null ? -1 : b.occ)).forEach(l => {
-    const mk = lmarkers[l.id]; if (mk) { mk.setStyle({ fillColor: occColor(l) }); dotLayer.addLayer(mk); }
+  const size = dotSize(); lstate.dotZoom = lmap.getZoom();
+  LS.items.filter(l => cityMatch(l) && bedMatch(l) && showMatch(l)).sort((a, b) => lstate.dots === 'up' ? (a.occUp == null ? -9 : a.occUp) - (b.occUp == null ? -9 : b.occUp) : (a.occ == null ? -1 : a.occ) - (b.occ == null ? -1 : b.occ)).forEach(l => {
+    const mk = lmarkers[l.id]; if (mk) { mk.setStyle({ fillColor: dotColor(l), radius: size.radius, weight: size.weight }); dotLayer.addLayer(mk); }
+  });
+}
+// In the 2030 view the map also shows where the gain gathers: a ring around each high-speed station and tourist
+// core, and a lighter ring around each World Cup stadium.
+function syncHubs(){
+  if (!hubLayer) return;
+  hubLayer.clearLayers();
+  const F = LS.meta.future; if (!F || lstate.dots !== 'up') return;
+  const label = (p, text) => L.marker([p.lat, p.lng], { interactive: false, keyboard: false, icon: L.divIcon({ className: '', html: `<div class="hub">${esc(text)}</div>`, iconSize: [0, 0] }) });
+  CITIES.forEach(c => {
+    const fc = F.cities[c]; if (!fc) return;
+    fc.anchors.forEach(a => { hubLayer.addLayer(L.circle([a.lat, a.lng], { pane: 'hubs', radius: F.nearKm * 1000, color: FUT[3], weight: 2.5, dashArray: '6 5', fill: false, interactive: false })); hubLayer.addLayer(label(a, a.name)); });
+    if (fc.stadium) { hubLayer.addLayer(L.circle([fc.stadium.lat, fc.stadium.lng], { pane: 'hubs', radius: F.stadiumKm * 1000, color: FUT[3], weight: 2, dashArray: '2 6', fill: false, interactive: false })); hubLayer.addLayer(label(fc.stadium, fc.stadium.name + ' · event nights')); }
   });
 }
 function syncList(){
@@ -614,6 +697,11 @@ function syncList(){
     `<div><span>Revenue</span><b>${lMoney(median(est.map(l => l.rev)))}</b><small>median a year${AB ? ', estimated' : ''}</small></div>` +
     `<div><span>Nightly rate</span><b>${lMoney(median(rows.map(l => l.adr)))}</b><small>median</small></div>` +
     `<div><span>Potential profit</span><b>${lSigned(median(rows.map(l => l.profitMonth)))}</b><small>median a month, after costs and tax</small></div></div>` +
+    (() => {
+      const ups = rows.filter(l => l.occUp != null), fc = futCity(lstate.city); if (!ups.length || !fc) return '';
+      const mean = ups.reduce((a, l) => a + l.occUp, 0) / ups.length;
+      return `<p class="note fut">From 2030, scenario: occupancy ${pts(mean)} on average for the listings in view, worth about ${plusMoney(median(ups.map(l => l.revUp)))} a year each at today's rates. ${esc(lstate.city)} as a whole: most likely ${pts(fc.central)}, anywhere from ${pts(fc.low)} to ${pts(fc.high)}.</p>`;
+    })() +
     (mkt ? `<p class="note">Whole ${esc(mkt.name)} market, measured by AirROI: ${MK[mkt.name] ? MK[mkt.name].kpi.occupancy : mkt.occ}% occupancy, ${money(mkt.revenue)} average revenue a year, ${money(mkt.adr)} a night, ${nf0.format(mkt.listings)} listings.</p>` : '');
 }
 // How the profit figure is built, in words, from the same numbers the sums use.
@@ -621,6 +709,10 @@ function profitMethod(){
   const c = LS.meta.costs; if (!c) return '';
   const pc = v => trim(v * 100, 1) + '%', bills = c.utilities + c.internet + c.tv + c.insurance;
   return ` Potential profit, a month, is the revenue potential less the running costs the Morocco deal desk counts: Airbnb's fee (${pc(c.platform)}), a manager (${pc(c.manager)}), repairs and linen (${pc(c.upkeep)}), Moroccan local and income taxes (${pc(c.localTax + c.incomeTax)} together), bills for electricity and water, internet, TV and insurance (${money(bills)} a month) and the building's service charge (${money(c.syndicPerM2 * c.surface['2'])} a month for a two-bedroom home: Airbnb does not give floor area, so a typical size for the bedroom count is assumed), then UK tax at ${pc(c.homeTax)} of what is left, less the Moroccan income tax already paid. No mortgage and no buying costs. It is worked out for whole homes only, not single rooms.`;
+}
+function futureMethod(){
+  const F = LS.meta.future; if (!F) return '';
+  return ` The figures in violet are a scenario for the years after 2030, once the Kenitra–Marrakesh high-speed line and the World Cup stadiums are in use; they are not a forecast. Each city has a researched range for the change in its average occupancy (set out in the "After 2030" section). A listing within ${F.nearKm} km of the high-speed station or the tourist core is given three times the weight of one more than ${F.farKm} km away, sliding in between, and one within ${F.stadiumKm} km of a World Cup stadium at least the middle weight; the weights are scaled so the city's average equals the researched figure. Revenue increase, a year, is the daily rate × the extra occupancy × the nights a listing in that city is open.`;
 }
 function renderExplorer(){
   if (!lFresh()) return;
@@ -630,11 +722,17 @@ function renderExplorer(){
     ? `${nf0.format(all.length)} listings read from Airbnb's public map search in November 2026: ${counts.length > 1 ? counts.slice(0, -1).join(', ') + ' and ' + counts[counts.length - 1] : counts[0]}. ${nf0.format(nEst)} have enough reviews for a revenue and occupancy estimate.`
     : `${nf0.format(all.length)} listings pulled from AirROI's API on ${lWhen()}.`;
   $('#bed-filter').innerHTML = bedChips().map(b => `<button type="button" data-b="${b[0]}" aria-pressed="${b[0] === lstate.beds}">${b[1]}</button>`).join('');
-  $('#llegend').innerHTML = $('#llegend-m').innerHTML = `<span class="box-label">Occupancy rate${AB ? ', estimated' : ''}</span>` + ['Under 25%', '25 to 50%', '50 to 75%', '75% and over'].map((t, i) => `<span><span class="sw" style="background:${BINCOL[i]}"></span>${t}</span>`).join('') + `<span><span class="sw" style="background:${GREY}"></span>No estimate</span>`;
+  const hasFut = !!LS.meta.future;
+  $('#dot-mode-box').hidden = !hasFut;
+  $('#dot-mode').innerHTML = [['occ', 'Occupancy today'], ['up', 'Gain from 2030']].map(o => `<button type="button" data-dots="${o[0]}" aria-pressed="${o[0] === lstate.dots}">${o[1]}</button>`).join('');
+  const sw = (col, t) => `<span><span class="sw" style="background:${col}"></span>${t}</span>`;
+  $('#llegend').innerHTML = $('#llegend-m').innerHTML = lstate.dots === 'up'
+    ? '<span class="box-label">Occupancy gain from 2030, scenario</span>' + ['Under +0.5 pts', '+0.5 to +1', '+1 to +1.5', '+1.5 and over'].map((t, i) => sw(FUT[i], t)).join('')
+    : `<span class="box-label">Occupancy rate${AB ? ', estimated' : ''}</span>` + ['Under 25%', '25 to 50%', '50 to 75%', '75% and over'].map((t, i) => sw(BINCOL[i], t)).join('') + sw(GREY, 'No estimate');
   $('#listings-note').textContent = AB
-    ? `Revenue and occupancy are estimates, not measurements. Each listing is ranked within its city by how often it is reviewed for its age (the age comes from its Airbnb ID), then given the occupancy that AirROI's data for that city shows at that rank. Revenue, a year, is the daily rate × that occupancy × the nights a listing in that city is open on average (${CITIES.map(c => (LS.meta.cities[c].openNights || 243) + ' in ' + c).join(', ')}). Revenue potential, a month, is the daily rate × a month of nights at the occupancy the top quarter of that city's listings reach (${CITIES.map(c => (LS.meta.cities[c].topQuarterOcc || 62) + '% in ' + c).join(', ')}). The daily rate is the one-night price Airbnb showed in late November for the first night the listing had free, so it is a spot price; a rate more than four times the norm for its size and city (eight times, for a listing with ten or more reviews) is treated as a placeholder and no revenue is worked out from it. Listings with fewer than three reviews get no revenue or occupancy estimate.${profitMethod()}`
+    ? `Revenue and occupancy are estimates, not measurements. Each listing is ranked within its city by how often it is reviewed for its age (the age comes from its Airbnb ID), then given the occupancy that AirROI's data for that city shows at that rank. Revenue, a year, is the daily rate × that occupancy × the nights a listing in that city is open on average (${CITIES.map(c => (LS.meta.cities[c].openNights || 243) + ' in ' + c).join(', ')}). Revenue potential, a month, is the daily rate × a month of nights at the occupancy the top quarter of that city's listings reach (${CITIES.map(c => (LS.meta.cities[c].topQuarterOcc || 62) + '% in ' + c).join(', ')}). The daily rate is the one-night price Airbnb showed in late November for the first night the listing had free, so it is a spot price; a rate more than four times the norm for its size and city (eight times, for a listing with ten or more reviews) is treated as a placeholder and no revenue is worked out from it. Listings with fewer than three reviews get no revenue or occupancy estimate.${profitMethod()}${futureMethod()}`
     : 'Revenue, occupancy and rate cover the trailing twelve months, as measured by AirROI.';
-  syncDots(); syncList();
+  syncDots(); syncHubs(); syncList();
 }
 function initListings(){
   const setup = $('#listings-setup'), ex = $('#ex');
@@ -656,7 +754,8 @@ function initListings(){
   const popW = popupWidth('#lmap');
   baseLayer(18).addTo(lmap);
   if (BUNDLED) { lmap.setMinZoom(12); lmap.setMaxZoom(16); }
-  dotLayer = L.layerGroup().addTo(lmap); pinLayer = L.layerGroup().addTo(lmap);
+  lmap.createPane('hubs').style.zIndex = 450; lmap.getPane('hubs').style.pointerEvents = 'none'; // rings sit above the dots, below the price pins
+  dotLayer = L.layerGroup().addTo(lmap); hubLayer = L.layerGroup().addTo(lmap); pinLayer = L.layerGroup().addTo(lmap);
   const pts = [];
   LS.items.forEach(l => {
     if (typeof l.lat !== 'number' || typeof l.lng !== 'number') return;
@@ -676,6 +775,7 @@ function initListings(){
   lmap.on('popupclose', () => { lstate.hold = false; });
   lmap.on('dragstart zoomstart', () => { lstate.hold = false; });
   lmap.on('moveend', () => { if (!lstate.hold) { lstate.page = 0; syncList(); } });
+  lmap.on('zoomend', () => { const z = lmap.getZoom(); if (Math.min(z, 14) === Math.min(lstate.dotZoom, 14) && Math.max(z, 11) === Math.max(lstate.dotZoom, 11)) return; lstate.dotZoom = z; const size = dotSize(); dotLayer.eachLayer(mk => mk.setStyle(size)); });
 }
 function toggleSave(id){
   if (saved[id]) delete saved[id]; else saved[id] = 1;
@@ -701,12 +801,12 @@ function renderAbout(){
 function setMarket(c){
   if (!MK[c] || c === state.mcity) return;
   state.mcity = c; R = MK[c]; K = R.kpi;
-  renderOverview(); renderTrends(); renderSpread(); renderSize(); renderCalc(); renderSupply(); renderGuests(); renderTop();
+  renderOverview(); renderFuture(); renderTrends(); renderSpread(); renderSize(); renderCalc(); renderSupply(); renderGuests(); renderTop();
   markCity(); if (state.view === 'rabat') setView('rabat'); else setView(state.view);
   renderMarkets(); renderAbout();
 }
 function renderAll(init){
-  renderHeader(); renderOverview(); renderTrends(); renderSpread(); renderSize(); renderCalc(init);
+  renderHeader(); renderOverview(); renderFuture(); renderTrends(); renderSpread(); renderSize(); renderCalc(init);
   renderSupply(); renderGuests(); renderTop(); renderExplorer(); renderLegend(); renderMarkets(); renderAbout();
 }
 
@@ -726,6 +826,7 @@ document.addEventListener('click', e => {
   else if (b.dataset.n) focusMarket(b.dataset.n);
   else if (b.dataset.b) { lstate.beds = b.dataset.b; lstate.page = 0; renderExplorer(); }
   else if (b.dataset.pg) { lstate.page += +b.dataset.pg; syncList(); }
+  else if (b.dataset.dots) { lstate.dots = b.dataset.dots === 'up' ? 'up' : 'occ'; renderExplorer(); }
   else if ((b.dataset.city === 'all' || isCity(b.dataset.city)) && lmap) {
     lstate.only = b.dataset.city === 'all' ? null : b.dataset.city; lstate.page = 0; lstate.hold = false; lmap.closePopup(); syncDots();
     const box = lstate.only && cityBox(lstate.only);

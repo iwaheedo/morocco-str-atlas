@@ -14,7 +14,7 @@
   color-scheme:light;
   --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#6e6d68;
   --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10); --wash:rgba(11,11,11,.05);
-  --series:#2a78d6; --series-soft:#b7d3f6; --link:#1c5cab; --good:#006300; --bad:#d03b3b;
+  --future:#5a2fc2; --series:#2a78d6; --series-soft:#b7d3f6; --link:#1c5cab; --good:#006300; --bad:#d03b3b;
   --tip-bg:#0b0b0b; --tip-ink:#fcfcfb;
 }
 @media (prefers-color-scheme:dark){
@@ -22,7 +22,7 @@
     color-scheme:dark;
     --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
     --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10); --wash:rgba(255,255,255,.07);
-    --series:#3987e5; --series-soft:#184f95; --link:#86b6ef; --good:#0ca30c; --bad:#e66767;
+    --future:#b79cf5; --series:#3987e5; --series-soft:#184f95; --link:#86b6ef; --good:#0ca30c; --bad:#e66767;
     --tip-bg:#f0efec; --tip-ink:#0b0b0b;
   }
 }
@@ -30,7 +30,7 @@
     color-scheme:dark;
     --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
     --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10); --wash:rgba(255,255,255,.07);
-    --series:#3987e5; --series-soft:#184f95; --link:#86b6ef; --good:#0ca30c; --bad:#e66767;
+    --future:#b79cf5; --series:#3987e5; --series-soft:#184f95; --link:#86b6ef; --good:#0ca30c; --bad:#e66767;
     --tip-bg:#f0efec; --tip-ink:#0b0b0b;
 }
 *{box-sizing:border-box}
@@ -255,6 +255,12 @@ footer li{margin:5px 0;max-width:92ch}
 .mk-bar[hidden]{display:none}
 .mk-bar .seg{max-width:100%;overflow-x:auto}
 .mk-bar .seg button{flex:none}
+.plain{margin:0;padding-left:18px}.plain li{margin:6px 0;max-width:86ch}
+.fut,.lc-row.future b,.tile .value.fut{color:var(--future)}
+.lc-row.future{border-top-color:color-mix(in srgb,var(--future) 40%,transparent)}
+.note.fut{border-left:3px solid var(--future);padding-left:10px}
+.leaflet-popup-content .fut{color:#5a2fc2}
+.hub{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;background:#5a2fc2;color:#fff;font:600 11.5px/1 system-ui,-apple-system,"Segoe UI",sans-serif;padding:4px 7px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.35);pointer-events:none}
 </style>
 </head>
 <body>
@@ -270,7 +276,7 @@ footer li{margin:5px 0;max-width:92ch}
 <div class="nav">
   <div class="wrap">
     <nav class="nav-links" aria-label="Sections">
-      <a href="#explore">Map</a><a href="#overview">Overview</a><a href="#trends">Trends</a><a href="#spread">Spread</a>
+      <a href="#explore">Map</a><a href="#overview">Overview</a><a href="#future" id="nav-future">After 2030</a><a href="#trends">Trends</a><a href="#spread">Spread</a>
       <a href="#size">By size</a><a href="#calc">Calculator</a><a href="#supply">Supply</a>
       <a href="#guests">Guests</a><a href="#top">Top earners</a><a href="#morocco">Morocco</a>
     </nav>
@@ -286,6 +292,7 @@ footer li{margin:5px 0;max-width:92ch}
       <div class="ex-badge" id="ex-badge"></div>
       <div class="ex-tools">
         <div class="box"><span class="box-label">Listing filter</span><div class="seg" id="bed-filter" role="group" aria-label="Bedrooms"></div></div>
+        <div class="box" id="dot-mode-box" hidden><span class="box-label">Dots show</span><div class="seg" id="dot-mode" role="group" aria-label="What the dots show"></div></div>
         <div class="box" id="llegend"></div>
       </div>
     </div>
@@ -296,7 +303,7 @@ footer li{margin:5px 0;max-width:92ch}
         <label class="sel" for="f-show"><span>Listings</span>
           <select id="f-show"><option value="all">All listings</option><option value="est">With revenue and occupancy</option><option value="r10">10 or more reviews</option><option value="saved">Saved</option></select></label>
         <label class="sel" for="f-sort"><span>Sort by</span>
-          <select id="f-sort"><option value="rev">Revenue</option><option value="occ">Occupancy rate</option><option value="adr">Daily rate</option><option value="potMonth">Revenue potential</option><option value="profitMonth">Potential profit</option><option value="reviews">Reviews</option></select></label>
+          <select id="f-sort"><option value="rev">Revenue</option><option value="occ">Occupancy rate</option><option value="adr">Daily rate</option><option value="potMonth">Revenue potential</option><option value="profitMonth">Potential profit</option><option value="occUp">Occupancy gain from 2030</option><option value="reviews">Reviews</option></select></label>
       </div>
       <div class="legend" id="llegend-m"></div>
       <div class="cards" id="cards"></div>
@@ -324,6 +331,31 @@ footer li{margin:5px 0;max-width:92ch}
     <p class="sub">Airbtics and AirROI both model Rabat from public Airbnb calendars, and they do not agree. Every other figure on this page is AirROI's, the lower of the two.</p>
     <div class="tbl-wrap"><table id="xcheck"></table></div>
     <p class="note warn">These are modelled estimates, not audited bookings. The gap between the two sources is a fair measure of how uncertain they are.</p>
+  </div>
+</section>
+
+<section id="future" hidden>
+  <div class="sec-head"><h2>After 2030: the rail line and the World Cup</h2><p id="fut-dek"></p></div>
+  <div class="grid g4" id="fut-kpis"></div>
+  <div class="card" style="margin-top:14px">
+    <h3>What changes for <span id="fut-city"></span></h3>
+    <ul class="plain" id="fut-facts"></ul>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <h3>The five cities side by side</h3>
+    <p class="sub">Long-run change in each city's average occupancy, in percentage points, from the rail line and the World Cup alone. The low case is what happens if new listings outrun the extra visitors.</p>
+    <div class="tbl-wrap"><table id="tbl-future"></table></div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <h3>What the evidence says</h3>
+    <ul class="plain">
+      <li><b>The line.</b> 430 km from Kenitra to Marrakesh, works launched April 2025, 41% complete in November 2026, delivery targeted for September 2029 with trains in service by about November 2029. No delay has been announced.</li>
+      <li><b>High-speed rail and tourism.</b> Studies of Spain's network find weak or no effect on overnight stays outside the largest cities, and one finds about 1.3% more foreign tourists. Studies of China find about 9% more arrivals, fading after about five years, with little extra revenue: more day trips and shorter stays.</li>
+      <li><b>World Cups.</b> Little lasting demand in host cities. South African hotel occupancy fell from about 70% to about 50% after 2010, as rooms had grown 21%.</li>
+      <li><b>Short lets around big events.</b> In the 2026 World Cup group stage, occupancy fell in 12 of 16 host markets while nightly rates rose. Paris listings grew 40 to 44% for the 2024 Olympics, and more than half the new hosts stayed.</li>
+      <li><b>Morocco.</b> 19.8 million visitors in 2025 against a target of 26 million by 2030, with 60,000 more hotel beds planned. These national trends are not counted in the figures above.</li>
+    </ul>
+    <p class="note">Sources: <a href="https://fr.le360.ma/politique/le-roi-lance-a-rabat-les-travaux-de-realisation-de-la-ligne-a-grande-vitesse-kenitra-marrakech_PZ4INBBVCFBSPAPEX5NUVAH7DE/" target="_blank" rel="noopener">Le360 on the line's launch</a>, <a href="https://latribunedemarrakech.com/tgv-kenitra-marrakech-avancement-travaux/" target="_blank" rel="noopener">La Tribune de Marrakech on progress</a>, <a href="https://fr.le360.ma/economie/lgv-kenitramarrakech-loncf-lance-un-vaste-appel-doffres-pour-la-construction-des-nouvelles-gares-et_BOFFV4L4KZCHPI2OCAVKT4YKI4/" target="_blank" rel="noopener">Le360 on the stations</a>, <a href="https://h24info.ma/?p=990221" target="_blank" rel="noopener">H24info on Africa Cup hotel nights</a>, <a href="https://fr.le360.ma/economie/tourisme-comment-la-lgv-a-tire-la-destination-tanger-208894/" target="_blank" rel="noopener">Le360 on Tangier after 2018</a>, <a href="https://diposit.ub.edu/dspace/handle/2445/107607" target="_blank" rel="noopener">Albalate and Fageda (2016)</a>, <a href="https://ideas.repec.org/p/ira/wpaper/201527.html" target="_blank" rel="noopener">Albalate, Campos and Jiménez (2017)</a>, <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7127499" target="_blank" rel="noopener">Campa and others (2016)</a>, <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9731443/" target="_blank" rel="noopener">Shi and others (2022)</a>, <a href="https://www.guesty.com/blog/what-the-2026-world-cup-actually-did-to-short-term-rentals/" target="_blank" rel="noopener">Guesty on the 2026 World Cup</a>, <a href="https://www.rentalscaleup.com/2026-fifa-world-cup-short-term-rental-demand/" target="_blank" rel="noopener">Rental Scale-Up on the same</a>, <a href="https://www.bladi.net/airbnb-rabat-accelere-marrakech-cale,122762.html" target="_blank" rel="noopener">Bladi on Rabat and Marrakesh supply</a>. Researched 21 November 2026. The city ranges and how they are spread across neighbourhoods are a judgement built on these sources, not a measurement.</p>
   </div>
 </section>
 
@@ -439,8 +471,8 @@ footer li{margin:5px 0;max-width:92ch}
 </footer>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
-<script src="data.js?v=f02afa547d"></script>
-<script src="listings.js?v=5a44a9303a"></script>
-<script src="app.js?v=148b8a7b7e"></script>
+<script src="data.js?v=2c0af88972"></script>
+<script src="listings.js?v=5df0eb01fc"></script>
+<script src="app.js?v=b405e73b0a"></script>
 </body>
 </html>
