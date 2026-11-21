@@ -251,6 +251,10 @@ footer ul{margin:0;padding-left:18px}
 footer li{margin:5px 0;max-width:92ch}
 #city-go{max-width:100%;overflow-x:auto;flex-wrap:nowrap}
 #city-go button{flex:none}
+.mk-bar{position:sticky;top:calc(49px + env(safe-area-inset-top,0px));z-index:900;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;margin-bottom:6px;background:color-mix(in srgb,var(--page) 94%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+.mk-bar[hidden]{display:none}
+.mk-bar .seg{max-width:100%;overflow-x:auto}
+.mk-bar .seg button{flex:none}
 </style>
 </head>
 <body>
@@ -274,7 +278,7 @@ footer li{margin:5px 0;max-width:92ch}
   </div>
 </div>
 
-<section id="explore" class="explore" aria-label="Rabat listings map">
+<section id="explore" class="explore" aria-label="Listings map">
   <div class="wrap"><div class="card setup" id="listings-setup" hidden></div></div>
   <div class="ex" id="ex">
     <div class="ex-map">
@@ -306,11 +310,16 @@ footer li{margin:5px 0;max-width:92ch}
 
 <main class="wrap">
 
+<div class="mk-bar" id="mk-bar" hidden>
+  <span class="ex-flabel" id="mk-city-label">Market analytics for</span>
+  <div class="seg" id="mk-city" role="group" aria-labelledby="mk-city-label"></div>
+</div>
+
 <section id="overview">
-  <div class="sec-head"><h2>Rabat market in numbers</h2><p>Measured by AirROI across every active Rabat listing, 12 months to October 2026.</p></div>
+  <div class="sec-head"><h2 id="ov-h">Rabat market in numbers</h2><p id="ov-dek">Measured by AirROI across every active Rabat listing, 12 months to October 2026.</p></div>
   <div class="grid g4" id="kpis"></div>
   <dl class="facts card" id="facts"></dl>
-  <div class="card" style="margin-top:14px">
+  <div class="card" id="xcheck-card" style="margin-top:14px">
     <h3>Two sources, two answers</h3>
     <p class="sub">Airbtics and AirROI both model Rabat from public Airbnb calendars, and they do not agree. Every other figure on this page is AirROI's, the lower of the two.</p>
     <div class="tbl-wrap"><table id="xcheck"></table></div>
@@ -351,7 +360,7 @@ footer li{margin:5px 0;max-width:92ch}
 </section>
 
 <section id="calc">
-  <div class="sec-head"><h2>Yield calculator</h2><p>Start from what a Rabat home of a given size grosses, take off running costs, and compare what is left with a purchase price.</p></div>
+  <div class="sec-head"><h2>Yield calculator</h2><p>Start from what a home of a given size grosses in the city chosen above, take off running costs, and compare what is left with a purchase price.</p></div>
   <div class="card calc">
     <div>
       <div class="field"><label for="c-size">Home size</label><select id="c-size"></select></div>
@@ -365,7 +374,7 @@ footer li{margin:5px 0;max-width:92ch}
     <div>
       <div class="tbl-wrap"><table id="c-ledger"></table></div>
       <div class="yields" id="c-yields"></div>
-      <p class="note">Cost shares are AirROI's model for a self-run Rabat listing. Not included: furnishing, purchase costs, mortgage or rent, building fees, and income tax. An estimate to compare options with, not a forecast.</p>
+      <p class="note">Cost shares are AirROI's model for a self-run listing in that city. Not included: furnishing, purchase costs, mortgage or rent, building fees, and income tax. An estimate to compare options with, not a forecast.</p>
     </div>
   </div>
 </section>
@@ -407,7 +416,7 @@ footer li{margin:5px 0;max-width:92ch}
 </section>
 
 <section id="morocco">
-  <div class="sec-head"><h2>Rabat against the rest of Morocco</h2><p id="morocco-dek"></p></div>
+  <div class="sec-head"><h2 id="morocco-h">Rabat against the rest of Morocco</h2><p id="morocco-dek"></p></div>
   <div class="card">
     <div class="map-bar">
       <div class="seg" id="map-view" role="group" aria-label="Map view"></div>
@@ -430,8 +439,8 @@ footer li{margin:5px 0;max-width:92ch}
 </footer>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
-<script src="data.js?v=8bdc12354d"></script>
+<script src="data.js?v=f02afa547d"></script>
 <script src="listings.js?v=98672938c3"></script>
-<script src="app.js?v=6375382511"></script>
+<script src="app.js?v=c2654b20fc"></script>
 </body>
 </html>

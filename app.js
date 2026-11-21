@@ -2,7 +2,12 @@
 // Content-Security-Policy can forbid inline scripts.
 (function(){
 "use strict";
-const D = window.STR_DATA, R = D.rabat, M = D.morocco, K = R.kpi;
+const D = window.STR_DATA, M = D.morocco;
+// Market data per city, all in the same shape. Rabat's was transcribed by hand; the others are generated (tools/build_cities.py).
+const MK = Object.create(null); MK['Rabat'] = D.rabat;
+if (D.cities && typeof D.cities === 'object') Object.keys(D.cities).forEach(c => { MK[c] = D.cities[c]; });
+const MCITIES = Object.keys(MK);
+let R = D.rabat, K = R.kpi; // the city the analytics sections are showing
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -10,7 +15,8 @@ const state = {
   cur: 'GBP', rates: Object.assign({}, D.meta.fallbackRates), ratesDate: D.meta.fallbackRatesDate,
   metric: 'revenue', sort: { key: 'rank', dir: 1 }, filter: 'all',
   calc: { priceMAD: null, customMAD: null },
-  live: false // true once a live exchange rate has been accepted
+  live: false, // true once a live exchange rate has been accepted
+  mcity: 'Rabat' // the city the market analytics are showing
 };
 try { const c = localStorage.getItem('str-cur'); if (['GBP', 'MAD', 'EUR', 'USD'].indexOf(c) >= 0) state.cur = c; } catch (e) {}
 
@@ -129,21 +135,25 @@ const nTitle = r => r.n != null ? `${r.label}: ${r.share >= 1 ? r.share + '%' : 
 /* ---------- sections ---------- */
 function renderHeader(){
   const fxNote = state.cur === 'MAD' ? 'Shown in Moroccan dirhams, as published.' : `Shown in ${state.cur}, converted from dirhams at ${state.live ? "today's rate" : 'the rate saved on ' + state.ratesDate} (${SYM[state.cur]}1 = MAD ${(1 / state.rates[state.cur]).toFixed(2)}).`;
-  $('#mast-dek').innerHTML = `${LS && MULTI ? CITIES.slice(0, -1).join(', ') + ' and ' + CITIES[CITIES.length - 1] + ' on the map; Rabat market analytics below. ' : nf0.format(K.listings) + ' active listings, 12 months to October 2026. '}Market estimates from <a href="${D.meta.links.airroiRabat}" target="_blank" rel="noopener">AirROI</a>, snapshot taken ${D.meta.snapshot}. ${fxNote}`;
+  $('#mast-dek').innerHTML = `${LS && MULTI ? CITIES.slice(0, -1).join(', ') + ' and ' + CITIES[CITIES.length - 1] + ' on the map, with market analytics for each further down. ' : nf0.format(K.listings) + ' active listings, 12 months to October 2026. '}Market estimates from <a href="${D.meta.links.airroiMorocco}" target="_blank" rel="noopener">AirROI</a>, snapshot taken ${D.meta.snapshot}. ${fxNote}`;
   $('#cur').innerHTML = Object.keys(SYM).map(c => `<button type="button" data-c="${c}" aria-pressed="${c === state.cur}">${c}</button>`).join('');
   document.querySelectorAll('.cur-code').forEach(e => e.textContent = state.cur);
 }
 
 function renderOverview(){
+  $('#ov-h').textContent = `${state.mcity} market in numbers`;
+  $('#ov-dek').textContent = `Measured by AirROI across every active ${state.mcity} listing, 12 months to October 2026.`;
+  $('#mk-bar').hidden = MCITIES.length < 2;
+  $('#mk-city').innerHTML = MCITIES.map(c => `<button type="button" data-mc="${esc(c)}" aria-pressed="${c === state.mcity}">${esc(c)}</button>`).join('');
   const tiles = [
-    { label: 'Annual revenue per listing', value: money(K.revenue), foot: `${deltaHtml(K.revenueYoY)} on the year before · Morocco ${money(K.moroccoRevenue, true)}` },
+    { label: 'Annual revenue per listing', value: money(K.revenue), foot: `${K.revenueYoY != null ? deltaHtml(K.revenueYoY) + ' on the year before · ' : ''}Morocco ${money(K.moroccoRevenue, true)}` },
     { label: 'Occupancy', value: pct(K.occupancy, 1), foot: `of open nights booked · Morocco ${K.moroccoOccupancy}%` },
     { label: 'Average nightly rate', value: money(K.adr), foot: `per booked night · Morocco ${money(K.moroccoAdr)}` },
     { label: 'RevPAR', value: money(K.revpar), foot: 'revenue per open night, booked or not' }
   ];
   $('#kpis').innerHTML = tiles.map(t => `<div class="card tile"><div class="label">${t.label}</div><div class="value">${t.value}</div><div class="foot">${t.foot}</div></div>`).join('');
   const facts = [
-    ['Active listings', nf0.format(K.listings), `${signed(K.listingsYoY)} on the year before`],
+    ['Active listings', nf0.format(K.listings), K.listingsYoY != null ? `${signed(K.listingsYoY)} on the year before` : 'in the 12 months'],
     ['Median listing', money(K.medianMonthly), 'per month'],
     ['Average stay', K.stay + ' nights', `about ${K.bookingsPerListing} bookings a year`],
     ['Booked ahead', K.leadTime + ' days', 'on average'],
@@ -152,7 +162,8 @@ function renderOverview(){
   ];
   $('#facts').innerHTML = facts.map(f => `<div><dt>${f[0]}</dt><dd>${f[1]}<small>${f[2]}</small></dd></div>`).join('');
   const L = D.meta.links;
-  $('#xcheck').innerHTML = `<thead><tr><th></th><th class="num"><a href="${L.airroiRabat}" target="_blank" rel="noopener">AirROI</a></th><th class="num"><a href="${L.airbticsRabat}" target="_blank" rel="noopener">Airbtics</a></th><th>How they differ</th></tr></thead><tbody>` +
+  $('#xcheck-card').hidden = !R.crossCheck; // the second source was only read for Rabat
+  if (R.crossCheck) $('#xcheck').innerHTML = `<thead><tr><th></th><th class="num"><a href="${L.airroiRabat}" target="_blank" rel="noopener">AirROI</a></th><th class="num"><a href="${L.airbticsRabat}" target="_blank" rel="noopener">Airbtics</a></th><th>How they differ</th></tr></thead><tbody>` +
     R.crossCheck.map(r => `<tr><td>${r.metric}</td><td class="num">${r.airroiMAD ? money(r.airroiMAD) : r.airroi}</td><td class="num">${r.airbticsMAD ? money(r.airbticsMAD, r.airbticsMAD >= 1e5) : r.airbtics}</td><td style="color:var(--ink2);font-size:13px">${r.note}</td></tr>`).join('') + '</tbody>';
 }
 
@@ -166,7 +177,8 @@ const METRICS = {
 };
 function renderTrends(){
   const mo = R.monthly, m = METRICS[state.metric];
-  $('#trends-dek').textContent = `${K.peakMonth} is usually the best month and ${K.lowMonth} the slowest: a typical July brings in about twice what March does, and December runs close to July.`;
+  const sv = R.seasonality.map(r => r.revenue), swing = Math.max.apply(null, sv) / Math.min.apply(null, sv);
+  $('#trends-dek').textContent = `In ${state.mcity}, ${K.peakMonth} is usually the best month and ${K.lowMonth} the slowest: a typical ${K.peakMonth} brings in about ${swing.toFixed(1)} times what a typical ${K.lowMonth} does.`;
   $('#metric').innerHTML = Object.keys(METRICS).map(k => `<button type="button" data-m="${k}" aria-pressed="${k === state.metric}">${METRICS[k].label}</button>`).join('');
   $('#metric-sub').textContent = m.sub + ', October 2025 to September 2026';
   const vals = mo.map(r => m.type === 'money' ? toCur(r[state.metric]) : r[state.metric]);
@@ -176,15 +188,15 @@ function renderTrends(){
     full: mo.map(r => r.m)
   });
   $('#tbl-monthly').innerHTML = '<thead><tr><th>Month</th><th class="num">Revenue</th><th class="num">Occupancy</th><th class="num">Nightly rate</th><th class="num">RevPAR</th><th class="num">Lead time</th><th class="num">Stay</th></tr></thead><tbody>' +
-    mo.map(r => `<tr><td>${r.m}</td><td class="num">${money(r.revenue)}</td><td class="num">${r.occ.toFixed(1)}%</td><td class="num">${money(r.adr)}</td><td class="num">${money(r.revpar)}</td><td class="num">${r.lead} days</td><td class="num">${r.los} nights</td></tr>`).join('') + '</tbody>';
+    mo.map(r => `<tr><td>${esc(r.m)}</td><td class="num">${money(r.revenue)}</td><td class="num">${r.occ.toFixed(1)}%</td><td class="num">${money(r.adr)}</td><td class="num">${money(r.revpar)}</td><td class="num">${r.lead} days</td><td class="num">${r.los} nights</td></tr>`).join('') + '</tbody>';
   const se = R.seasonality, seVals = se.map(r => toCur(r.revenue)), seBig = Math.max.apply(null, seVals) >= 10000;
   columnChart($('#chart-season'), {
     values: seVals, labels: se.map(r => r.m), type: 'money', fmt: v => seBig ? trim(v / 1000, 1) + 'k' : nf0.format(Math.round(v)),
     aria: 'Average revenue per listing by calendar month',
-    tip: i => `<b>${se[i].m}</b> · ${se[i].season} season<br>${money(se[i].revenue)} per listing`
+    tip: i => `<b>${esc(se[i].m)}</b> · ${esc(se[i].season)} season<br>${money(se[i].revenue)} per listing`
   });
   $('#tbl-seasons').innerHTML = '<thead><tr><th>Season</th><th class="num">Revenue / month</th><th class="num">Occupancy</th><th class="num">Nightly rate</th></tr></thead><tbody>' +
-    R.seasons.map(s => `<tr><td>${s.name}<span class="minor">${s.months}</span></td><td class="num">${money(s.revenue)}</td><td class="num">${s.occ}%</td><td class="num">${money(s.adr)}</td></tr>`).join('') + '</tbody>';
+    R.seasons.map(s => `<tr><td>${esc(s.name)}<span class="minor">${esc(s.months)}</span></td><td class="num">${money(s.revenue)}</td><td class="num">${s.occ}%</td><td class="num">${money(s.adr)}</td></tr>`).join('') + '</tbody>';
 }
 
 function spreadSvg(r){
@@ -200,21 +212,27 @@ function renderSpread(){
   $('#spread-dek').textContent = `The averages hide a wide range. In a typical month a top-quarter listing takes in at least ${(Math.floor(s.p75 / s.p25 * 10) / 10).toFixed(1)} times what a bottom-quarter one does.`;
   const f = (r, v, suf) => (r.type === 'money' ? money(v) : v + '%') + (suf || '');
   $('#tbl-spread').innerHTML = '<thead><tr><th>Per listing</th><th class="num">Bottom quarter</th><th class="num">Median</th><th class="num">Top quarter</th><th class="num">Top tenth</th><th>Range (large dot = median)</th></tr></thead><tbody>' +
-    R.spread.map(r => `<tr><td>${r.metric}</td><td class="num">${f(r, r.p25)} or less</td><td class="num"><b>${f(r, r.p50)}</b></td><td class="num">${f(r, r.p75, '+')}</td><td class="num">${f(r, r.p90, '+')}</td><td>${spreadSvg(r)}</td></tr>`).join('') + '</tbody>';
+    R.spread.map(r => `<tr><td>${esc(r.metric)}</td><td class="num">${f(r, r.p25)} or less</td><td class="num"><b>${f(r, r.p50)}</b></td><td class="num">${f(r, r.p75, '+')}</td><td class="num">${f(r, r.p90, '+')}</td><td>${spreadSvg(r)}</td></tr>`).join('') + '</tbody>';
 }
 
 function renderSize(){
-  const b = R.bedrooms, max = Math.max.apply(null, b.map(r => r.median)), top = b.slice().sort((a, c) => c.listings - a.listings)[0];
+  const b = R.bedrooms, known = b.filter(r => r.median != null), max = Math.max.apply(null, known.map(r => r.median)), top = b.slice().sort((a, c) => c.listings - a.listings)[0];
   const groupName = { 'Studio': 'Studios', '1 bedroom': 'One-bedroom homes', '2 bedrooms': 'Two-bedroom homes', '3 bedrooms': 'Three-bedroom homes' }[top.size] || top.size;
-  $('#size-dek').textContent = `${groupName} are the largest group at ${Math.round(top.share)}% of entire homes. Bigger homes charge more a night but fill slightly fewer of them.`;
+  $('#size-dek').textContent = `${groupName} are the largest group in ${state.mcity} at ${Math.round(top.share)}% of entire homes. Bigger homes charge more a night.` + (known.length < b.length ? ' AirROI gives earnings only for the sizes with enough listings to measure.' : '');
   $('#tbl-beds').innerHTML = '<thead><tr><th>Home size</th><th class="num">Listings</th><th>Median annual revenue</th><th class="num">Average annual revenue</th><th class="num">Nightly rate</th><th class="num">Occupancy</th></tr></thead><tbody>' +
-    b.map(r => `<tr><td>${r.size}</td><td class="num">${nf0.format(r.listings)}<span class="minor">${r.share}%</span></td><td><div class="inbar" title="${esc(r.size)}: median ${esc(money(r.median))} a year"><div class="fill" style="flex:0 0 ${(r.median / max * 62).toFixed(1)}%"></div><span class="v">${money(r.median)}</span></div></td><td class="num">${money(r.avg)}</td><td class="num">${money(r.adr)}</td><td class="num">${r.occ}%</td></tr>`).join('') + '</tbody>';
+    b.map(r => `<tr><td>${esc(r.size)}</td><td class="num">${nf0.format(r.listings)}<span class="minor">${r.share}%</span></td>` + (r.median != null
+      ? `<td><div class="inbar" title="${esc(r.size)}: median ${esc(money(r.median))} a year"><div class="fill" style="flex:0 0 ${(r.median / max * 62).toFixed(1)}%"></div><span class="v">${money(r.median)}</span></div></td><td class="num">${money(r.avg)}</td><td class="num">${money(r.adr)}</td><td class="num">${r.occ}%</td>`
+      : '<td style="color:var(--ink2)">Too few listings to measure</td><td class="num">–</td><td class="num">–</td><td class="num">–</td>') + '</tr>').join('') + '</tbody>';
 }
 
 function renderCalc(init){
   const size = $('#c-size'), basis = $('#c-basis'), mgmt = $('#c-mgmt'), price = $('#c-price'), custom = $('#c-custom');
+  if (renderCalc.city !== state.mcity) { // sizes on offer are the ones this city has earnings for
+    const opts = R.bedrooms.map((r, i) => [r, i]).filter(o => o[0].median != null), two = opts.filter(o => o[0].size === '2 bedrooms')[0] || opts[0];
+    size.innerHTML = opts.map(o => `<option value="${o[1]}">${esc(o[0].size)}</option>`).join(''); size.value = String(two[1]);
+    renderCalc.city = state.mcity;
+  }
   if (init) {
-    size.innerHTML = R.bedrooms.map((r, i) => `<option value="${i}">${r.size}</option>`).join(''); size.value = '2';
     [size, basis, mgmt].forEach(e => e.addEventListener('change', () => renderCalc()));
     // Only a positive, finite amount counts; anything else is treated as empty.
     const amount = el => { const n = parseFloat(el.value); return isFinite(n) && n > 0 ? n : null; };
@@ -230,8 +248,8 @@ function renderCalc(init){
   const b = R.bedrooms[+size.value], c = R.costs, mg = +mgmt.value;
   const G = basis.value === 'custom' ? (state.calc.customMAD || 0) : b[basis.value];
   const lines = [
-    ["Airbnb's fee", '13.7%', G * c.airbnbFee],
-    ['Cleaning and laundry', "3.5%, covered by guests' cleaning fees", G * c.cleaning],
+    ["Airbnb's fee", (c.airbnbFee * 100).toFixed(1) + '%', G * c.airbnbFee],
+    ['Cleaning and laundry', (c.cleaning * 100).toFixed(1) + "%, covered by guests' cleaning fees", G * c.cleaning],
     ['Utilities and internet', '5%', G * c.utilities],
     ['Guest supplies', '2%', G * c.supplies],
     ['Repairs and upkeep', '3%', G * c.upkeep],
@@ -239,7 +257,7 @@ function renderCalc(init){
   ];
   if (mg) lines.push(['Management', Math.round(mg * 100) + '% of nightly bookings', G * (1 - c.cleaning) * mg]);
   const costs = lines.reduce((a, l) => a + l[2], 0), net = G - costs;
-  $('#c-ledger').innerHTML = `<tbody><tr><td>Gross bookings per year<span class="minor">${basis.value === 'custom' ? 'your estimate' : (basis.value === 'median' ? 'median ' : 'average ') + b.size.toLowerCase() + ' in Rabat'}</span></td><td class="num"><b>${money(G)}</b></td></tr>` +
+  $('#c-ledger').innerHTML = `<tbody><tr><td>Gross bookings per year<span class="minor">${basis.value === 'custom' ? 'your estimate' : (basis.value === 'median' ? 'median ' : 'average ') + esc(b.size.toLowerCase()) + ' in ' + esc(state.mcity)}</span></td><td class="num"><b>${money(G)}</b></td></tr>` +
     lines.map(l => `<tr><td>${l[0]}<span class="minor">${l[1]}</span></td><td class="num">−${money(l[2])}</td></tr>`).join('') +
     `<tr class="total"><td>Left before housing costs<span class="minor" style="font-weight:400">about ${money(net / 12)} a month</span></td><td class="num">${money(net)}</td></tr></tbody>`;
   const p = state.calc.priceMAD;
@@ -248,34 +266,37 @@ function renderCalc(init){
     : '';
 }
 
+// Bars are drawn against a fixed top value so cities compare; it grows if a city's biggest share would not fit.
+const scaleTop = (rows, floor) => Math.max(floor, Math.ceil(Math.max.apply(null, rows.map(r => r.share)) / 5) * 5);
 function renderSupply(){
-  $('#supply-dek').textContent = `Rabat is an apartment market: ${Math.round(R.propertyTypes[0].share)}% of listings are apartments or condos and ${Math.round(R.roomTypes[0].share)}% are entire homes. Most listings are open most of the year, but few are booked for more than half of it.`;
+  const apt = R.propertyTypes.filter(r => /Apartment/.test(r.label))[0] || R.propertyTypes[0], whole = R.roomTypes.filter(r => /Entire/.test(r.label))[0] || R.roomTypes[0];
+  $('#supply-dek').textContent = `${state.mcity} is an apartment market: ${Math.round(apt.share)}% of listings are apartments or condos and ${Math.round(whole.share)}% are entire homes. Most listings are open most of the year, but few are booked for more than half of it.`;
   barList('#bl-prop', R.propertyTypes, 100, shareFmt, nTitle);
-  barList('#bl-cap', R.capacity, 30, shareFmt, nTitle);
-  barList('#bl-min', R.minStay, 55, shareFmt, nTitle);
-  barList('#bl-booked', R.bookedDays, 30, shareFmt, nTitle);
-  barList('#bl-cancel', R.cancellation, 45, shareFmt, nTitle);
+  barList('#bl-cap', R.capacity, scaleTop(R.capacity, 30), shareFmt, nTitle);
+  barList('#bl-min', R.minStay, scaleTop(R.minStay, 55), shareFmt, nTitle);
+  barList('#bl-booked', R.bookedDays, scaleTop(R.bookedDays, 30), shareFmt, nTitle);
+  barList('#bl-cancel', R.cancellation, scaleTop(R.cancellation, 45), shareFmt, nTitle);
   barList('#bl-amen', R.amenities, 100, shareFmt, nTitle);
   $('#tbl-amen').innerHTML = '<thead><tr><th>Amenity</th><th class="num">Listings with it</th><th class="num">Avg. revenue with</th><th class="num">Avg. revenue without</th><th class="num">Gap</th></tr></thead><tbody>' +
-    R.amenityGap.map(r => `<tr><td>${r.label}</td><td class="num">${r.have}%</td><td class="num">${money(r.withRev)}</td><td class="num">${money(r.withoutRev)}</td><td class="num">+${r.gap}%</td></tr>`).join('') + '</tbody>';
+    R.amenityGap.map(r => `<tr><td>${esc(r.label)}</td><td class="num">${r.have}%</td><td class="num">${money(r.withRev)}</td><td class="num">${money(r.withoutRev)}</td><td class="num">+${r.gap}%</td></tr>`).join('') + '</tbody>';
 }
 
 function renderGuests(){
   const g = R.guestCountries;
-  $('#guests-dek').textContent = `Rabat runs on foreign visitors: 88% of guests who left reviews live outside Morocco, and ${g[0].label} alone accounts for ${Math.round(g[0].share)}%.`;
-  barList('#bl-country', g, 40, r => r.share + '%', nTitle);
-  barList('#bl-lang', R.guestLanguages, 40, r => r.share + '%', nTitle);
+  $('#guests-dek').textContent = `${state.mcity} runs on foreign visitors: ${K.international}% of guests who left reviews live outside Morocco, and ${g[0].label} alone accounts for ${Math.round(g[0].share)}%.`;
+  barList('#bl-country', g, scaleTop(g, 40), r => r.share + '%', nTitle);
+  barList('#bl-lang', R.guestLanguages, scaleTop(R.guestLanguages, 40), r => r.share + '%', nTitle);
   barList('#bl-rate', R.ratings.map(r => ({ label: r.label, score: r.score, _v: r.score - 4 })), 1, r => r.score.toFixed(2), r => `${r.label}: ${r.score.toFixed(2)} out of 5`);
 }
 
 function renderTop(){
-  const t = R.topListings[0];
-  $('#top-dek').textContent = `The best listing in Rabat grossed ${money(t.revenue, true)}, about ${Math.round(t.revenue / K.revenue)} times the city average. Riads and large homes dominate the top of the table.`;
+  const t = R.topListings[0], big = R.topListings.filter(r => r.beds >= 4).length;
+  $('#top-dek').textContent = `The best listing in ${state.mcity} grossed ${money(t.revenue, true)}, about ${Math.round(t.revenue / K.revenue)} times the city average. ${big ? `${big} of the ${R.topListings.length} top earners ${big === 1 ? 'has' : 'have'} four or more bedrooms.` : ''}`;
   $('#tbl-listings').innerHTML = '<thead><tr><th>Listing</th><th class="num">Revenue</th><th class="num">Occupancy</th><th class="num">Nightly rate</th></tr></thead><tbody>' +
-    R.topListings.map(r => `<tr><td>${esc(r.name)}<span class="minor">Entire home · ${r.beds} bedrooms · rated ${r.rating.toFixed(2)}</span></td><td class="num">${money(r.revenue, true)}</td><td class="num">${r.occ.toFixed(1)}%</td><td class="num">${money(r.adr)}</td></tr>`).join('') + '</tbody>';
+    R.topListings.map(r => `<tr><td>${esc(r.name)}<span class="minor">${esc(r.kind || 'Entire home')}${r.beds ? ' · ' + r.beds + ' bedroom' + (r.beds === 1 ? '' : 's') : ''}${r.rating ? ' · rated ' + r.rating.toFixed(2) : ''}</span></td><td class="num">${money(r.revenue, true)}</td><td class="num">${r.occ.toFixed(1)}%</td><td class="num">${money(r.adr)}</td></tr>`).join('') + '</tbody>';
   $('#tbl-hosts').innerHTML = '<thead><tr><th>Host</th><th class="num">Listings</th><th class="num">Gross revenue</th><th class="num">Per listing</th><th class="num">Rating</th></tr></thead><tbody>' +
     R.topHosts.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${r.listings}</td><td class="num">${money(r.revenue, true)}</td><td class="num">${money(r.per, true)}</td><td class="num">${r.rating.toFixed(2)}</td></tr>`).join('') + '</tbody>';
-  $('#atlas-note').textContent = `These are the top earners as measured by AirROI. The map at the top of the page has ${LS ? nf0.format(LS.items.length) : 'the'} Rabat listings, each with its own estimated revenue and occupancy.`;
+  $('#atlas-note').textContent = `These are the top earners as measured by AirROI. The map at the top of the page has ${LS ? nf0.format(LS.items.filter(l => l.city === state.mcity).length) : 'the'} ${state.mcity} listings, each with its own estimated revenue and occupancy.`;
 }
 
 /* ---------- Morocco map + table ---------- */
@@ -319,8 +340,19 @@ function showMarker(m, mk, zoom){
 }
 // Keep popups narrower than the map they open in, so they are never cut off on a phone.
 const popupWidth = sel => { const w = Math.max(170, Math.min(300, $(sel).clientWidth - 64)); return { maxWidth: w, minWidth: Math.min(190, w) }; };
+// The chosen city's row in the Morocco table, and how far other markets are from it. For Rabat the distances
+// are AirROI's own; for the other cities they are straight lines between the approximate town centres.
+const homeMarket = () => M.markets.filter(m => m.name === state.mcity)[0] || M.markets.filter(m => m.name === 'Rabat')[0];
+function kmFrom(m){
+  const h = homeMarket(); if (m === h) return 0;
+  if (h.name === 'Rabat') return m.km != null ? m.km : null;
+  const r = Math.PI / 180, a = Math.pow(Math.sin((m.lat - h.lat) * r / 2), 2) + Math.cos(m.lat * r) * Math.cos(h.lat * r) * Math.pow(Math.sin((m.lng - h.lng) * r / 2), 2);
+  const km = Math.round(12742 * Math.asin(Math.sqrt(a)));
+  return km <= 45 ? km : null;
+}
+const kmNote = m => { const k = kmFrom(m); return k ? ` · ${homeMarket().name === 'Rabat' ? '' : 'about '}${k} km from ${homeMarket().name}` : ''; };
 function popupHtml(m){
-  return `<b>${esc(m.name)}</b><div class="r">${esc(m.region)}${m.km ? ' · ' + m.km + ' km from Rabat' : ''}${m.rank ? ' · ranked ' + m.rank + ' of ' + M.totals.ranked : ''}</div><table>` +
+  return `<b>${esc(m.name)}</b><div class="r">${esc(m.region)}${esc(kmNote(m))}${m.rank ? ' · ranked ' + m.rank + ' of ' + M.totals.ranked : ''}</div><table>` +
     `<tr><td>Avg. annual revenue</td><td>${money(m.revenue)}</td></tr><tr><td>Occupancy</td><td>${m.occ}%</td></tr><tr><td>Nightly rate</td><td>${money(m.adr)}</td></tr>` +
     `<tr><td>Active listings</td><td>${nf0.format(m.listings)}</td></tr>${m.yoy != null ? `<tr><td>Revenue on the year</td><td>${signed(m.yoy)}</td></tr>` : ''}${m.slow != null ? `<tr><td>Slow month</td><td>${m.slow}% of best</td></tr>` : ''}</table>`;
 }
@@ -332,24 +364,34 @@ function initMap(){
   baseLayer(16).addTo(map);
   if (BUNDLED) { map.setMinZoom(5); map.setMaxZoom(10); map.setMaxBounds([[27.2, -13.5], [37.6, 1.2]]); }
   M.markets.slice().sort((a, b) => b.listings - a.listings).forEach(m => {
-    const isR = m.name === 'Rabat';
-    const mk = L.circleMarker([m.lat, m.lng], { radius: 4 + Math.sqrt(m.listings) / 4.2, fillColor: BINCOL[binOf(m.revenue)], fillOpacity: .88, color: isR ? '#0b0b0b' : '#fff', weight: isR ? 3 : 2 }).addTo(map);
+    const mk = L.circleMarker([m.lat, m.lng], { radius: 4 + Math.sqrt(m.listings) / 4.2, fillColor: BINCOL[binOf(m.revenue)], fillOpacity: .88, color: '#fff', weight: 2 }).addTo(map);
     mk.bindPopup(() => popupHtml(m), popW);
     mk.on('popupopen', () => mk.closeTooltip());
-    if (isR) mk.bindTooltip('Rabat', { permanent: true, direction: 'top', offset: [0, -12], className: 'mk-label' });
-    else mk.bindTooltip(() => `${m.name} · ${money(m.revenue, true)}`, { direction: 'top' });
     markers[m.name] = mk;
   });
   setView('rabat');
+  markCity();
   // Once the reader pans, zooms or jumps to a market, neither preset view is current.
   map.on('dragstart zoomstart', () => { if (state.view && !state.moving) setView(null); });
 }
+// Ring and label the chosen city's marker; every other marker shows its name on hover.
+function markCity(){
+  if (!map || !map._loaded) return; // markers can only be restyled once the map has a view
+  M.markets.forEach(m => {
+    const mk = markers[m.name]; if (!mk) return;
+    const on = m.name === homeMarket().name;
+    mk.setStyle({ color: on ? '#0b0b0b' : '#fff', weight: on ? 3 : 2 });
+    mk.unbindTooltip();
+    if (on) { mk.bindTooltip(esc(m.name), { permanent: true, direction: 'top', offset: [0, -12], className: 'mk-label' }); mk.bringToFront(); }
+    else mk.bindTooltip(() => `${esc(m.name)} · ${money(m.revenue, true)}`, { direction: 'top' });
+  });
+}
 function setView(v){
   state.view = v;
-  $('#map-view').innerHTML = [['rabat', 'Rabat area'], ['all', 'All Morocco']].map(o => `<button type="button" data-v="${o[0]}" aria-pressed="${o[0] === v}">${o[1]}</button>`).join('');
+  $('#map-view').innerHTML = [['rabat', esc(state.mcity) + ' area'], ['all', 'All Morocco']].map(o => `<button type="button" data-v="${o[0]}" aria-pressed="${o[0] === v}">${o[1]}</button>`).join('');
   if (!map || !v) return;
   state.moving = true;
-  if (v === 'rabat') map.setView([34.03, -6.88], 10, { animate: false });
+  if (v === 'rabat') { const h = homeMarket(); map.setView(h.name === 'Rabat' ? [34.03, -6.88] : [h.lat, h.lng], 10, { animate: false }); }
   else map.fitBounds(M.markets.map(m => [m.lat, m.lng]), { padding: [24, 24], animate: false });
   state.moving = false;
 }
@@ -361,17 +403,20 @@ function renderLegend(){
 }
 const COLS = [['rank', '#', 1], ['name', 'Market', 0], ['revenue', 'Avg. revenue', 1], ['occ', 'Occupancy', 1], ['adr', 'Nightly rate', 1], ['slow', 'Slow month', 1], ['yoy', 'Revenue on the year', 1], ['listings', 'Listings', 1]];
 function renderMarkets(){
-  const T = M.totals, rabat = M.markets.find(m => m.name === 'Rabat');
-  $('#morocco-dek').textContent = `AirROI ranks Rabat ${rabat.rank}th of ${T.ranked} Moroccan markets with 100 or more listings. Its listings earn about ${Math.round((1 - K.revenue / T.revenue) * 100)}% less than the national average of ${money(T.revenue, true)}, but it is the fifth-largest market and fills more nights than most.`;
-  $('#mk-filter').innerHTML = [['all', 'All markets'], ['near', 'Near Rabat']].map(o => `<button type="button" data-f="${o[0]}" aria-pressed="${o[0] === state.filter}">${o[1]}</button>`).join('');
+  const T = M.totals, home = homeMarket(), diff = Math.round((K.revenue / T.revenue - 1) * 100);
+  const ord = n => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd', 'th', 'th', 'th', 'th', 'th', 'th'][n % 10]);
+  const bySize = M.markets.filter(m => m.rank).sort((a, b) => b.listings - a.listings).indexOf(home) + 1;
+  $('#morocco-h').textContent = `${state.mcity} against the rest of Morocco`;
+  $('#morocco-dek').textContent = `AirROI ranks ${home.name} ${ord(home.rank)} of ${T.ranked} Moroccan markets with 100 or more listings. Its listings earn about ${Math.abs(diff)}% ${diff < 0 ? 'less' : 'more'} than the national average of ${money(T.revenue, true)}, and it is the ${bySize === 1 ? '' : ord(bySize) + ' '}largest of those markets by number of listings.`;
+  $('#mk-filter').innerHTML = [['all', 'All markets'], ['near', 'Near ' + esc(state.mcity)]].map(o => `<button type="button" data-f="${o[0]}" aria-pressed="${o[0] === state.filter}">${o[1]}</button>`).join('');
   const { key, dir } = state.sort;
-  const rows = M.markets.filter(m => state.filter === 'all' || m.km != null).sort((a, b) => {
+  const rows = M.markets.filter(m => state.filter === 'all' || kmFrom(m) != null).sort((a, b) => {
     const x = a[key], y = b[key];
     if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
     return (typeof x === 'string' ? x.localeCompare(y) : x - y) * dir;
   });
   $('#tbl-markets').innerHTML = '<thead><tr>' + COLS.map(c => `<th class="${c[2] ? 'num' : ''}" aria-sort="${key === c[0] ? (dir > 0 ? 'ascending' : 'descending') : 'none'}"><button type="button" class="th-btn" data-k="${c[0]}">${c[1]}<span class="arrow">${key === c[0] ? (dir > 0 ? '▲' : '▼') : ''}</span></button></th>`).join('') + '</tr></thead><tbody>' +
-    rows.map(m => `<tr class="clickable${m.name === 'Rabat' ? ' is-rabat' : ''}" data-n="${esc(m.name)}" tabindex="0"><td class="num">${m.rank || '–'}</td><td>${esc(m.name)}<span class="minor">${esc(m.region)}${m.km ? ' · ' + m.km + ' km from Rabat' : ''}</span></td><td class="num">${money(m.revenue)}</td><td class="num">${m.occ}%</td><td class="num">${money(m.adr)}</td><td class="num">${m.slow != null ? m.slow + '%' : '–'}</td><td class="num">${deltaHtml(m.yoy)}</td><td class="num">${nf0.format(m.listings)}</td></tr>`).join('') + '</tbody>';
+    rows.map(m => `<tr class="clickable${m.name === home.name ? ' is-rabat' : ''}" data-n="${esc(m.name)}" tabindex="0"><td class="num">${m.rank || '–'}</td><td>${esc(m.name)}<span class="minor">${esc(m.region)}${esc(kmNote(m))}</span></td><td class="num">${money(m.revenue)}</td><td class="num">${m.occ}%</td><td class="num">${money(m.adr)}</td><td class="num">${m.slow != null ? m.slow + '%' : '–'}</td><td class="num">${deltaHtml(m.yoy)}</td><td class="num">${nf0.format(m.listings)}</td></tr>`).join('') + '</tbody>';
 }
 function focusMarket(name){
   const mk = markers[name]; if (!mk || !map) return;
@@ -545,7 +590,7 @@ function syncList(){
     `<div><span>Revenue</span><b>${lMoney(median(est.map(l => l.rev)))}</b><small>median a year${AB ? ', estimated' : ''}</small></div>` +
     `<div><span>Nightly rate</span><b>${lMoney(median(rows.map(l => l.adr)))}</b><small>median</small></div>` +
     `<div><span>Active listings</span><b>${nf0.format(rows.length)}</b><small>in view</small></div></div>` +
-    (mkt ? `<p class="note">Whole ${esc(mkt.name)} market, measured by AirROI: ${mkt.name === 'Rabat' ? R.kpi.occupancy : mkt.occ}% occupancy, ${money(mkt.revenue)} average revenue a year, ${money(mkt.adr)} a night, ${nf0.format(mkt.listings)} listings.</p>` : '');
+    (mkt ? `<p class="note">Whole ${esc(mkt.name)} market, measured by AirROI: ${MK[mkt.name] ? MK[mkt.name].kpi.occupancy : mkt.occ}% occupancy, ${money(mkt.revenue)} average revenue a year, ${money(mkt.adr)} a night, ${nf0.format(mkt.listings)} listings.</p>` : '');
 }
 function renderExplorer(){
   if (!lFresh()) return;
@@ -612,16 +657,24 @@ function renderAbout(){
   const L = D.meta.links, r = state.rates;
   const rate = state.cur === 'MAD' ? `1 GBP = ${(1 / r.GBP).toFixed(2)} MAD` : `1 ${state.cur} = ${(1 / r[state.cur]).toFixed(2)} MAD`;
   $('#about').innerHTML = [
-    `Market figures: AirROI. (2026). <a href="${L.airroiRabat}" target="_blank" rel="noopener">Rabat, Morocco Airbnb market data</a>, ${D.meta.period}, and its <a href="${L.airroiMorocco}" target="_blank" rel="noopener">Morocco market ranking</a>, both updated ${D.meta.sourceUpdated}. Read from the free public pages on ${D.meta.snapshot}; AirROI refreshes them monthly.`,
+    `Market figures: AirROI. (2026). Airbnb market data for ${MCITIES.map(c => `<a href="${esc(MK[c].link || L.airroiRabat)}" target="_blank" rel="noopener">${esc(c)}</a>`).join(', ')}, ${D.meta.period}, and its <a href="${L.airroiMorocco}" target="_blank" rel="noopener">Morocco market ranking</a>, both updated ${D.meta.sourceUpdated}. Read from the free public pages on ${D.meta.snapshot}${D.meta.citiesRead ? ' (' + MCITIES.filter(c => c !== 'Rabat').join(', ') + ' on ' + D.meta.citiesRead + ')' : ''}; AirROI refreshes them monthly.`,
     `Second opinion: <a href="${L.airbticsRabat}" target="_blank" rel="noopener">Airbtics' free Rabat summary</a>. Nothing here comes from Airbtics' paid dashboard.`,
     AB
-      ? `Listings on the map: read from Airbnb's public Rabat map search on ${lWhen()}. Daily rate, rating and review count are as Airbnb showed them. Revenue and occupancy per listing are estimates from review pace, calibrated to AirROI's market figures; the note under the list explains how.`
+      ? `Listings on the map: read from Airbnb's public map search for ${CITIES.join(', ')}, starting ${lWhen()}. Daily rate, rating and review count are as Airbnb showed them. Revenue and occupancy per listing are estimates from review pace, calibrated to AirROI's market figures; the note under the list explains how.`
       : `Listings on the map, when loaded, come from <a href="${L.airroiApi}" target="_blank" rel="noopener">AirROI's API</a> under your own key, and are kept for at most 30 days as its terms require.`,
     `All figures are estimates modelled from public Airbnb listings and calendars. They are gross bookings before costs and tax, and cover Airbnb only. For personal research; check anything that matters against the source.`,
     `Source figures are in Moroccan dirhams. Other currencies are converted at ${state.live ? 'the current rate' : 'a saved rate'} (${rate}, ${state.ratesDate}). <a href="${L.fx}" target="_blank" rel="noopener">Rates by Exchange Rate API</a>.`
   ].map(t => `<li>${t}</li>`).join('');
 }
 
+// Point the analytics sections at another city. The map's own city buttons call this too.
+function setMarket(c){
+  if (!MK[c] || c === state.mcity) return;
+  state.mcity = c; R = MK[c]; K = R.kpi;
+  renderOverview(); renderTrends(); renderSpread(); renderSize(); renderCalc(); renderSupply(); renderGuests(); renderTop();
+  markCity(); if (state.view === 'rabat') setView('rabat'); else setView(state.view);
+  renderMarkets(); renderAbout();
+}
 function renderAll(init){
   renderHeader(); renderOverview(); renderTrends(); renderSpread(); renderSize(); renderCalc(init);
   renderSupply(); renderGuests(); renderTop(); renderExplorer(); renderLegend(); renderMarkets(); renderAbout();
@@ -636,6 +689,7 @@ document.addEventListener('click', e => {
   const again = dk && window.CSS && CSS.escape ? `button[data-${dk.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}="${CSS.escape(b.dataset[dk])}"]` : null;
   if (b.dataset.c) { state.cur = b.dataset.c; try { localStorage.setItem('str-cur', state.cur); } catch (err) {} renderAll(); }
   else if (b.dataset.m) { state.metric = b.dataset.m; renderTrends(); }
+  else if (b.dataset.mc) setMarket(b.dataset.mc);
   else if (b.dataset.v) setView(b.dataset.v);
   else if (b.dataset.f) { state.filter = b.dataset.f; renderMarkets(); }
   else if (b.dataset.k) { const k = b.dataset.k; state.sort = { key: k, dir: state.sort.key === k ? -state.sort.dir : (k === 'rank' || k === 'name' ? 1 : -1) }; renderMarkets(); }
@@ -647,6 +701,7 @@ document.addEventListener('click', e => {
     const box = lstate.only && cityBox(lstate.only);
     if (box) lmap.fitBounds(box, { animate: false, maxZoom: 14 });
     syncList();
+    if (lstate.only) setMarket(lstate.only); // the analytics further down follow the city picked on the map
     const again = document.querySelector('#city-go [aria-pressed="true"]'); if (again) again.focus();
   }
   else if (b.dataset.save) toggleSave(b.dataset.save);
