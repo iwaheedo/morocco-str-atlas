@@ -129,7 +129,7 @@ const nTitle = r => r.n != null ? `${r.label}: ${r.share >= 1 ? r.share + '%' : 
 /* ---------- sections ---------- */
 function renderHeader(){
   const fxNote = state.cur === 'MAD' ? 'Shown in Moroccan dirhams, as published.' : `Shown in ${state.cur}, converted from dirhams at ${state.live ? "today's rate" : 'the rate saved on ' + state.ratesDate} (${SYM[state.cur]}1 = MAD ${(1 / state.rates[state.cur]).toFixed(2)}).`;
-  $('#mast-dek').innerHTML = `${nf0.format(K.listings)} active listings, 12 months to October 2026. Market estimates from <a href="${D.meta.links.airroiRabat}" target="_blank" rel="noopener">AirROI</a>, snapshot taken ${D.meta.snapshot}. ${fxNote}`;
+  $('#mast-dek').innerHTML = `${LS && MULTI ? CITIES.slice(0, -1).join(', ') + ' and ' + CITIES[CITIES.length - 1] + ' on the map; Rabat market analytics below. ' : nf0.format(K.listings) + ' active listings, 12 months to October 2026. '}Market estimates from <a href="${D.meta.links.airroiRabat}" target="_blank" rel="noopener">AirROI</a>, snapshot taken ${D.meta.snapshot}. ${fxNote}`;
   $('#cur').innerHTML = Object.keys(SYM).map(c => `<button type="button" data-c="${c}" aria-pressed="${c === state.cur}">${c}</button>`).join('');
   document.querySelectorAll('.cur-code').forEach(e => e.textContent = state.cur);
 }
@@ -385,19 +385,22 @@ function focusMarket(name){
 /* ---------- Explorer: Rabat listings on the map (optional: listings.js) ---------- */
 // listings.js carries text written by strangers (anyone can name a listing anything), so none of it is
 // trusted: every field is forced to its expected type here, and strings are escaped again where shown.
+// The cities on the map: where to centre each one, and its name in the market table further down.
+const CITY_VIEW = { 'Rabat': [34.0, -6.85, 13], 'Salé': [34.045, -6.765, 13], 'Kenitra': [34.262, -6.585, 13], 'Tangier': [35.768, -5.825, 13] };
+const isCity = c => typeof c === 'string' && Object.prototype.hasOwnProperty.call(CITY_VIEW, c);
 function cleanListings(raw){
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.items)) return null;
   const num = v => typeof v === 'number' && isFinite(v) ? v : null;
   const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : null;
   const day = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
-  const NUMS = ['lat', 'lng', 'bedrooms', 'beds', 'baths', 'guests', 'rating', 'reviews', 'adr', 'rev', 'pot', 'occ', 'since', 'availDays', 'bookedDays', 'calNights', 'calTaken', 'calOcc'];
+  const NUMS = ['lat', 'lng', 'bedrooms', 'beds', 'baths', 'guests', 'rating', 'reviews', 'adr', 'rev', 'potMonth', 'occ', 'since', 'availDays', 'bookedDays', 'calNights', 'calTaken', 'calOcc'];
   const seen = Object.create(null), items = [];
   raw.items.forEach(l => {
     if (!l || typeof l !== 'object') return;
     const id = typeof l.id === 'string' || typeof l.id === 'number' ? String(l.id).slice(0, 40) : '';
     if (!id || seen[id]) return;
     seen[id] = 1;
-    const o = { id: id, name: str(l.name, 200), type: str(l.type, 60), room: str(l.room, 30), priceDate: day(l.priceDate),
+    const o = { id: id, name: str(l.name, 200), type: str(l.type, 60), room: str(l.room, 30), city: isCity(l.city) ? l.city : 'Rabat', priceDate: day(l.priceDate),
       cal: typeof l.cal === 'string' && /^[acx]{1,400}$/.test(l.cal) ? l.cal : null,
       isNew: l.isNew === true, fav: l.fav === true, superhost: l.superhost === true, priceOdd: l.priceOdd === true, exact: l.exact === false ? false : undefined };
     NUMS.forEach(k => { o[k] = num(l[k]); });
@@ -408,14 +411,17 @@ function cleanListings(raw){
   return { items: items, meta: { source: m.source === 'airbnb' ? 'airbnb' : 'airroi', pulledAt: day(m.pulledAt),
     currency: ['GBP', 'MAD', 'EUR', 'USD'].indexOf(m.currency) >= 0 ? m.currency : 'MAD',
     totalInMarket: num(m.totalInMarket), sort: str(m.sort, 40), calFrom: day(m.calFrom), calTo: day(m.calTo), calCount: num(m.calCount),
-    openNights: num(m.openNights), topQuarterOcc: num(m.topQuarterOcc) } };
+    cities: Object.keys(CITY_VIEW).reduce((acc, c) => { const v = m.cities && typeof m.cities === 'object' && m.cities[c] && typeof m.cities[c] === 'object' ? m.cities[c] : {};
+      acc[c] = { openNights: num(v.openNights), topQuarterOcc: num(v.topQuarterOcc) }; return acc; }, {}) } };
 }
 const LS = cleanListings(window.STR_LISTINGS);
 // Two possible sources. 'airbnb': read from Airbnb's public map search; price, rating and reviews are as
 // shown there, and occupancy and revenue are estimates. Otherwise AirROI's API, with its own measured figures.
 const AB = !!LS && LS.meta.source === 'airbnb';
+const CITIES = LS ? Object.keys(CITY_VIEW).filter(c => LS.items.some(l => l.city === c)) : [];
+const MULTI = CITIES.length > 1;
 const GREY = '#c3c2b7';
-const lstate = { beds: 'any', show: 'all', sort: 'rev', page: 0, per: 12, hold: false };
+const lstate = { beds: 'any', show: 'all', sort: 'rev', page: 0, per: 12, hold: false, city: 'Rabat' };
 let lmap = null, dotLayer = null, pinLayer = null, pins = Object.create(null);
 const lmarkers = Object.create(null), byId = Object.create(null), saved = Object.create(null);
 try { (JSON.parse(localStorage.getItem('str-saved') || '[]') || []).forEach(id => { if (typeof id === 'string') saved[id] = 1; }); } catch (e) {}
@@ -447,7 +453,7 @@ const EST = AB ? ' <abbr title="An estimate, not a measurement. See the note und
 // The five figures a card and a popup show, already formatted.
 function figures(l){
   return {
-    pot: l.pot != null ? lMoney(l.pot) : '–',
+    pot: l.potMonth != null ? lMoney(l.potMonth) : '–',
     open: AB ? (l.calNights != null && l.calTaken != null ? (l.calNights - l.calTaken) + ' of ' + l.calNights : '–') : (l.availDays != null ? nf0.format(l.availDays) : '–'),
     rev: l.rev != null ? lMoney(l.rev) : '–',
     occ: l.occ != null ? Math.round(l.occ) + '%' : '–',
@@ -460,18 +466,18 @@ function cardHtml(l){
   const f = figures(l);
   return `<article class="lcard" data-card="${esc(l.id)}" tabindex="0">` +
     `<header><span class="lc-kind">${esc(kind(l))}</span><span class="lc-stars">${esc(stars(l))}</span></header>` +
-    `<p class="lc-name">${esc(l.name || 'Listing')}</p>` +
-    `<div class="lc-row two"><div class="m"><b>${f.pot}</b><span>Revenue potential</span></div><div class="m"><b>${f.open}</b><span>${OPEN_LABEL}</span></div></div>` +
-    `<div class="lc-row three"><div class="m key"><b>${f.rev}</b><span>Revenue${EST}</span></div><div class="m key"><b>${f.occ}</b><span>Occupancy rate${EST}</span></div><div class="m key"><b>${f.adr}</b><span>Daily rate</span></div></div>` +
-    (AB && l.occ == null ? '<p class="lc-why">Too few reviews to estimate revenue or occupancy.</p>' : l.priceOdd ? '<p class="lc-why">The rate is far above others of its size, so no revenue is estimated.</p>' : '') +
+    `<p class="lc-name">${MULTI ? esc(l.city) + ' · ' : ''}${esc(l.name || 'Listing')}</p>` +
+    `<div class="lc-row two"><div class="m"><b>${f.pot}</b><span>Revenue potential, a month</span></div><div class="m"><b>${f.open}</b><span>${OPEN_LABEL}</span></div></div>` +
+    `<div class="lc-row three"><div class="m key"><b>${f.rev}</b><span>Revenue, a year${EST}</span></div><div class="m key"><b>${f.occ}</b><span>Occupancy rate${EST}</span></div><div class="m key"><b>${f.adr}</b><span>Daily rate</span></div></div>` +
+    (l.priceOdd ? '<p class="lc-why">The rate is far above others of its size in this city, so no revenue is worked out from it.</p>' : AB && l.occ == null ? '<p class="lc-why">Too few reviews to estimate revenue or occupancy.</p>' : '') +
     `<div class="lc-actions">${airbnbLink(l, 'btn')}<button type="button" class="btn ghost" data-save="${esc(l.id)}" aria-pressed="${!!saved[l.id]}">${saved[l.id] ? '♥ Saved' : '♡ Save'}</button></div></article>`;
 }
 function lPopup(l){
   const f = figures(l), since = l.since ? ' · listed ' + Math.floor(l.since) : '';
-  const rows = [['Revenue' + (AB ? ' (est.)' : ''), f.rev], ['Occupancy rate' + (AB ? ' (est.)' : ''), f.occ],
-    ['Daily rate', f.adr + (l.priceDate ? ' <span style="color:#52514e">on ' + shortDate(l.priceDate) + '</span>' : '')], ['Revenue potential', f.pot], [OPEN_LABEL, f.open]];
+  const rows = [['Revenue, a year' + (AB ? ' (est.)' : ''), f.rev], ['Occupancy rate' + (AB ? ' (est.)' : ''), f.occ],
+    ['Daily rate', f.adr + (l.priceDate ? ' <span style="color:#52514e">on ' + shortDate(l.priceDate) + '</span>' : '')], ['Revenue potential, a month', f.pot], [OPEN_LABEL, f.open]];
   const tags = [l.fav ? 'Guest favourite' : null, l.superhost ? 'Superhost' : null, l.exact === false ? 'approximate location' : null].filter(Boolean).join(' · ');
-  return `<b>${esc(l.name || 'Listing')}</b><div class="r">${esc(kind(l))} · ${esc(stars(l))}${since}${tags ? ' · ' + tags : ''}</div><table>` +
+  return `<b>${esc(l.name || 'Listing')}</b><div class="r">${MULTI ? esc(l.city) + ' · ' : ''}${esc(kind(l))} · ${esc(stars(l))}${since}${tags ? ' · ' + tags : ''}</div><table>` +
     rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('') + '</table>' +
     (l.cal && LS.meta.calFrom && LS.meta.calTo ? `<div class="calstrip" role="img" aria-label="Nights taken and free, ${shortDate(LS.meta.calFrom)} to ${shortDate(LS.meta.calTo)}">${l.cal.split('').map(ch => `<i class="${ch === 'a' ? '' : 't'}"></i>`).join('')}</div><div class="r" style="margin:3px 0 0">${shortDate(LS.meta.calFrom)} to ${shortDate(LS.meta.calTo)} · dark = taken</div>` : '') +
     airbnbLink(l, '');
@@ -517,24 +523,33 @@ function syncList(){
       pinLayer.addLayer(mk); pins[l.id] = mk;
     });
   }
-  const est = rows.filter(l => l.occ != null), mo = median(est.map(l => l.occ)), K0 = R.kpi;
-  $('#area').innerHTML = `<h3>Map area overview</h3><p class="sub">The ${nf0.format(rows.length)} listing${rows.length === 1 ? '' : 's'} in view${AB ? '; revenue and occupancy from the ' + nf0.format(est.length) + ' with three or more reviews' : ''}.</p>` +
+  const est = rows.filter(l => l.occ != null), mo = median(est.map(l => l.occ));
+  // Which city is the map on? The one most of the listings in view belong to.
+  const tally = Object.create(null); rows.forEach(l => { tally[l.city] = (tally[l.city] || 0) + 1; });
+  // A city picked with the buttons stays named until the map is moved by hand (Salé's view also takes in Rabat's old town).
+  const here = lstate.pick && tally[lstate.pick] ? lstate.pick : Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0] || lstate.city || 'Rabat';
+  if (rows.length) lstate.city = here;
+  $('#city-go').hidden = !MULTI;
+  $('#city-go').innerHTML = CITIES.map(c => `<button type="button" data-city="${esc(c)}" aria-pressed="${c === lstate.city}">${esc(c)}</button>`).join('');
+  const mkt = M.markets.find(x => x.name === lstate.city);
+  $('#area').innerHTML = `<h3>Map area overview${MULTI ? ': ' + esc(lstate.city) : ''}</h3><p class="sub">The ${nf0.format(rows.length)} listing${rows.length === 1 ? '' : 's'} in view${AB ? '; revenue and occupancy from the ' + nf0.format(est.length) + ' with three or more reviews' : ''}.</p>` +
     `<div class="ov"><div><span>Occupancy rate</span><b>${mo != null ? Math.round(mo) + '%' : '–'}</b><small>median${AB ? ', estimated' : ''}</small></div>` +
     `<div><span>Revenue</span><b>${lMoney(median(est.map(l => l.rev)))}</b><small>median a year${AB ? ', estimated' : ''}</small></div>` +
     `<div><span>Nightly rate</span><b>${lMoney(median(rows.map(l => l.adr)))}</b><small>median</small></div>` +
     `<div><span>Active listings</span><b>${nf0.format(rows.length)}</b><small>in view</small></div></div>` +
-    `<p class="note">Whole Rabat market, measured by AirROI: ${K0.occupancy}% occupancy, ${money(K0.revenue)} average revenue, ${money(K0.adr)} a night, ${nf0.format(K0.listings)} listings.</p>`;
+    (mkt ? `<p class="note">Whole ${esc(mkt.name)} market, measured by AirROI: ${mkt.name === 'Rabat' ? R.kpi.occupancy : mkt.occ}% occupancy, ${money(mkt.revenue)} average revenue a year, ${money(mkt.adr)} a night, ${nf0.format(mkt.listings)} listings.</p>` : '');
 }
 function renderExplorer(){
   if (!lFresh()) return;
   const all = LS.items, nEst = all.filter(l => l.occ != null).length;
+  const counts = CITIES.map(c => `${nf0.format(all.filter(l => l.city === c).length)} in ${c}`);
   $('#listings-dek').textContent = AB
-    ? `${nf0.format(all.length)} Rabat listings read from Airbnb's public map search on ${lWhen()}, about ${Math.round(all.length / K.listings * 100)}% of the ${nf0.format(K.listings)} AirROI counts as active. ${nf0.format(nEst)} have enough reviews for a revenue and occupancy estimate.`
-    : `${nf0.format(all.length)} Rabat listings pulled from AirROI's API on ${lWhen()}.`;
+    ? `${nf0.format(all.length)} listings read from Airbnb's public map search in November 2026: ${counts.length > 1 ? counts.slice(0, -1).join(', ') + ' and ' + counts[counts.length - 1] : counts[0]}. ${nf0.format(nEst)} have enough reviews for a revenue and occupancy estimate.`
+    : `${nf0.format(all.length)} listings pulled from AirROI's API on ${lWhen()}.`;
   $('#bed-filter').innerHTML = bedChips().map(b => `<button type="button" data-b="${b[0]}" aria-pressed="${b[0] === lstate.beds}">${b[1]}</button>`).join('');
   $('#llegend').innerHTML = $('#llegend-m').innerHTML = `<span class="box-label">Occupancy rate${AB ? ', estimated' : ''}</span>` + ['Under 25%', '25 to 50%', '50 to 75%', '75% and over'].map((t, i) => `<span><span class="sw" style="background:${BINCOL[i]}"></span>${t}</span>`).join('') + `<span><span class="sw" style="background:${GREY}"></span>No estimate</span>`;
   $('#listings-note').textContent = AB
-    ? `Revenue and occupancy are estimates, not measurements. Each listing is ranked by how often it is reviewed for its age (the age comes from its Airbnb ID), then given the occupancy that AirROI's Rabat data shows at that rank. Revenue is the daily rate × that occupancy × ${LS.meta.openNights || 243} nights, the average a Rabat listing is open in a year. Revenue potential is the daily rate at ${LS.meta.topQuarterOcc || 62}% occupancy, the level the top quarter of listings reach, open all year. The daily rate is the one-night price Airbnb showed in late November, so it is a spot price. Listings with fewer than three reviews get no estimate.`
+    ? `Revenue and occupancy are estimates, not measurements. Each listing is ranked within its city by how often it is reviewed for its age (the age comes from its Airbnb ID), then given the occupancy that AirROI's data for that city shows at that rank. Revenue, a year, is the daily rate × that occupancy × the nights a listing in that city is open on average (${CITIES.map(c => (LS.meta.cities[c].openNights || 243) + ' in ' + c).join(', ')}). Revenue potential, a month, is the daily rate × a month of nights at the occupancy the top quarter of that city's listings reach (${CITIES.map(c => (LS.meta.cities[c].topQuarterOcc || 62) + '% in ' + c).join(', ')}). The daily rate is the one-night price Airbnb showed in late November for the first night the listing had free, so it is a spot price; a rate more than four times the norm for its size and city (eight times, for a listing with ten or more reviews) is treated as a placeholder and no revenue is worked out from it. Listings with fewer than three reviews get no revenue or occupancy estimate.`
     : 'Revenue, occupancy and rate cover the trailing twelve months, as measured by AirROI.';
   syncDots(); syncList();
 }
@@ -557,7 +572,7 @@ function initListings(){
   L.control.zoom({ position: 'bottomright' }).addTo(lmap);
   const popW = popupWidth('#lmap');
   baseLayer(18).addTo(lmap);
-  if (BUNDLED) { lmap.setMinZoom(12); lmap.setMaxZoom(16); lmap.setMaxBounds([[33.85, -7.05], [34.12, -6.66]]); }
+  if (BUNDLED) { lmap.setMinZoom(12); lmap.setMaxZoom(16); }
   dotLayer = L.layerGroup().addTo(lmap); pinLayer = L.layerGroup().addTo(lmap);
   const pts = [];
   LS.items.forEach(l => {
@@ -570,13 +585,13 @@ function initListings(){
     lmarkers[l.id] = mk;
   });
   // Open on the middle of the listings rather than their outer edge, so the dense centre is readable.
-  if (pts.length > 200) lmap.setView([median(pts.map(p => p[0])), median(pts.map(p => p[1]))], 13);
+  if (pts.length > 200) { const v = CITY_VIEW[CITIES.indexOf('Rabat') >= 0 ? 'Rabat' : CITIES[0]]; lmap.setView([v[0], v[1]], v[2]); }
   else if (pts.length) lmap.fitBounds(pts, { padding: [24, 24], maxZoom: 14 });
   else lmap.setView([34.013, -6.84], 12);
   // The list follows the map. A popup nudging the map into place does not count as the reader moving it.
   lmap.on('popupopen', () => { lstate.hold = true; });
   lmap.on('popupclose', () => { lstate.hold = false; });
-  lmap.on('dragstart zoomstart', () => { lstate.hold = false; });
+  lmap.on('dragstart zoomstart', () => { lstate.hold = false; if (!lstate.auto) lstate.pick = null; });
   lmap.on('moveend', () => { if (!lstate.hold) { lstate.page = 0; syncList(); } });
 }
 function toggleSave(id){
@@ -619,6 +634,7 @@ document.addEventListener('click', e => {
   else if (b.dataset.n) focusMarket(b.dataset.n);
   else if (b.dataset.b) { lstate.beds = b.dataset.b; lstate.page = 0; renderExplorer(); }
   else if (b.dataset.pg) { lstate.page += +b.dataset.pg; syncList(); }
+  else if (isCity(b.dataset.city) && lmap) { const v = CITY_VIEW[b.dataset.city]; lmap.closePopup(); lstate.hold = false; lstate.pick = lstate.city = b.dataset.city; lstate.auto = true; lmap.setView([v[0], v[1]], v[2], { animate: false }); lstate.auto = false; if (lstate.page) { lstate.page = 0; } syncList(); }
   else if (b.dataset.save) toggleSave(b.dataset.save);
   else if (b.dataset.card) openListing(b.dataset.card);
   if (again) { let nb = null; try { nb = document.querySelector(again); } catch (err) {} if (nb && !nb.disabled && nb !== document.activeElement) nb.focus({ preventScroll: true }); }

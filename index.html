@@ -256,7 +256,7 @@ footer li{margin:5px 0;max-width:92ch}
 <header class="mast">
   <div class="wrap">
     <div class="eyebrow">Morocco · short-term rentals</div>
-    <h1>Rabat Airbnb market</h1>
+    <h1>Morocco Airbnb market</h1>
     <p id="mast-dek"></p>
   </div>
 </header>
@@ -285,11 +285,12 @@ footer li{margin:5px 0;max-width:92ch}
     </div>
     <div class="ex-side">
       <div class="ex-filters">
+        <div class="seg" id="city-go" role="group" aria-label="City" hidden></div>
         <span class="ex-flabel">Filters</span>
         <label class="sel" for="f-show"><span>Listings</span>
           <select id="f-show"><option value="all">All listings</option><option value="est">With revenue and occupancy</option><option value="r10">10 or more reviews</option><option value="saved">Saved</option></select></label>
         <label class="sel" for="f-sort"><span>Sort by</span>
-          <select id="f-sort"><option value="rev">Revenue</option><option value="occ">Occupancy rate</option><option value="adr">Daily rate</option><option value="pot">Revenue potential</option><option value="reviews">Reviews</option></select></label>
+          <select id="f-sort"><option value="rev">Revenue</option><option value="occ">Occupancy rate</option><option value="adr">Daily rate</option><option value="potMonth">Revenue potential</option><option value="reviews">Reviews</option></select></label>
       </div>
       <div class="legend" id="llegend-m"></div>
       <div class="cards" id="cards"></div>
@@ -304,6 +305,7 @@ footer li{margin:5px 0;max-width:92ch}
 <main class="wrap">
 
 <section id="overview">
+  <div class="sec-head"><h2>Rabat market in numbers</h2><p>Measured by AirROI across every active Rabat listing, 12 months to October 2026.</p></div>
   <div class="grid g4" id="kpis"></div>
   <dl class="facts card" id="facts"></dl>
   <div class="card" style="margin-top:14px">
@@ -426,8 +428,8 @@ footer li{margin:5px 0;max-width:92ch}
 </footer>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
-<script src="data.js"></script>
-<script src="listings.js"></script>
-<script src="app.js"></script>
+<script src="data.js?v=8bdc12354d"></script>
+<script src="listings.js?v=98672938c3"></script>
+<script src="app.js?v=e92445247b"></script>
 </body>
 </html>
