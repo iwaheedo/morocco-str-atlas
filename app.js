@@ -421,7 +421,7 @@ const AB = !!LS && LS.meta.source === 'airbnb';
 const CITIES = LS ? Object.keys(CITY_VIEW).filter(c => LS.items.some(l => l.city === c)) : [];
 const MULTI = CITIES.length > 1;
 const GREY = '#c3c2b7';
-const lstate = { beds: 'any', show: 'all', sort: 'rev', page: 0, per: 12, hold: false, city: 'Rabat' };
+const lstate = { beds: 'any', show: 'all', sort: 'rev', page: 0, per: 12, hold: false, city: 'Rabat', only: null };
 let lmap = null, dotLayer = null, pinLayer = null, pins = Object.create(null);
 const lmarkers = Object.create(null), byId = Object.create(null), saved = Object.create(null);
 try { (JSON.parse(localStorage.getItem('str-saved') || '[]') || []).forEach(id => { if (typeof id === 'string') saved[id] = 1; }); } catch (e) {}
@@ -483,9 +483,17 @@ function lPopup(l){
     airbnbLink(l, '');
 }
 // Listings that pass the filters and sit inside the map view, best first.
+const cityMatch = l => !lstate.only || l.city === lstate.only;
+// The box that holds the middle 94% of a city's listings: where the map goes when that city is picked.
+function cityBox(c){
+  const pts = LS.items.filter(l => l.city === c && typeof l.lat === 'number' && typeof l.lng === 'number');
+  if (!pts.length) return null;
+  const at = (k, q) => { const a = pts.map(l => l[k]).sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.floor(q * a.length))]; };
+  return [[at('lat', 0.03), at('lng', 0.03)], [at('lat', 0.97), at('lng', 0.97)]];
+}
 function listNow(){
   const b = lmap ? lmap.getBounds() : null, k = lstate.sort;
-  const rows = LS.items.filter(l => bedMatch(l) && showMatch(l) && (!b || (typeof l.lat === 'number' && typeof l.lng === 'number' && b.contains([l.lat, l.lng]))));
+  const rows = LS.items.filter(l => cityMatch(l) && bedMatch(l) && showMatch(l) && (!b || (typeof l.lat === 'number' && typeof l.lng === 'number' && b.contains([l.lat, l.lng]))));
   rows.sort((x, y) => { const a = x[k], c = y[k]; if (a == null && c == null) return (y.reviews || 0) - (x.reviews || 0); if (a == null) return 1; if (c == null) return -1; return c - a; });
   return rows;
 }
@@ -502,7 +510,7 @@ function openListing(id){
 function syncDots(){
   if (!dotLayer) return;
   dotLayer.clearLayers();
-  LS.items.filter(l => bedMatch(l) && showMatch(l)).sort((a, b) => (a.occ == null ? -1 : a.occ) - (b.occ == null ? -1 : b.occ)).forEach(l => {
+  LS.items.filter(l => cityMatch(l) && bedMatch(l) && showMatch(l)).sort((a, b) => (a.occ == null ? -1 : a.occ) - (b.occ == null ? -1 : b.occ)).forEach(l => {
     const mk = lmarkers[l.id]; if (mk) { mk.setStyle({ fillColor: occColor(l) }); dotLayer.addLayer(mk); }
   });
 }
@@ -526,13 +534,13 @@ function syncList(){
   const est = rows.filter(l => l.occ != null), mo = median(est.map(l => l.occ));
   // Which city is the map on? The one most of the listings in view belong to.
   const tally = Object.create(null); rows.forEach(l => { tally[l.city] = (tally[l.city] || 0) + 1; });
-  // A city picked with the buttons stays named until the map is moved by hand (Salé's view also takes in Rabat's old town).
-  const here = lstate.pick && tally[lstate.pick] ? lstate.pick : Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0] || lstate.city || 'Rabat';
-  if (rows.length) lstate.city = here;
+  // Which city is this about? The one picked with the buttons, or else the one most listings in view belong to.
+  const here = lstate.only || Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0] || lstate.city || 'Rabat';
+  lstate.city = here;
   $('#city-go').hidden = !MULTI;
-  $('#city-go').innerHTML = CITIES.map(c => `<button type="button" data-city="${esc(c)}" aria-pressed="${c === lstate.city}">${esc(c)}</button>`).join('');
+  $('#city-go').innerHTML = `<button type="button" data-city="all" aria-pressed="${!lstate.only}">All</button>` + CITIES.map(c => `<button type="button" data-city="${esc(c)}" aria-pressed="${c === lstate.only}">${esc(c)}</button>`).join('');
   const mkt = M.markets.find(x => x.name === lstate.city);
-  $('#area').innerHTML = `<h3>Map area overview${MULTI ? ': ' + esc(lstate.city) : ''}</h3><p class="sub">The ${nf0.format(rows.length)} listing${rows.length === 1 ? '' : 's'} in view${AB ? '; revenue and occupancy from the ' + nf0.format(est.length) + ' with three or more reviews' : ''}.</p>` +
+  $('#area').innerHTML = `<h3>Map area overview${MULTI ? ': ' + esc(lstate.city) : ''}</h3><p class="sub">The ${nf0.format(rows.length)} ${lstate.only ? esc(lstate.only) + ' ' : ''}listing${rows.length === 1 ? '' : 's'} in view${AB ? '; revenue and occupancy from the ' + nf0.format(est.length) + ' with three or more reviews' : ''}.</p>` +
     `<div class="ov"><div><span>Occupancy rate</span><b>${mo != null ? Math.round(mo) + '%' : '–'}</b><small>median${AB ? ', estimated' : ''}</small></div>` +
     `<div><span>Revenue</span><b>${lMoney(median(est.map(l => l.rev)))}</b><small>median a year${AB ? ', estimated' : ''}</small></div>` +
     `<div><span>Nightly rate</span><b>${lMoney(median(rows.map(l => l.adr)))}</b><small>median</small></div>` +
@@ -591,7 +599,7 @@ function initListings(){
   // The list follows the map. A popup nudging the map into place does not count as the reader moving it.
   lmap.on('popupopen', () => { lstate.hold = true; });
   lmap.on('popupclose', () => { lstate.hold = false; });
-  lmap.on('dragstart zoomstart', () => { lstate.hold = false; if (!lstate.auto) lstate.pick = null; });
+  lmap.on('dragstart zoomstart', () => { lstate.hold = false; });
   lmap.on('moveend', () => { if (!lstate.hold) { lstate.page = 0; syncList(); } });
 }
 function toggleSave(id){
@@ -634,7 +642,13 @@ document.addEventListener('click', e => {
   else if (b.dataset.n) focusMarket(b.dataset.n);
   else if (b.dataset.b) { lstate.beds = b.dataset.b; lstate.page = 0; renderExplorer(); }
   else if (b.dataset.pg) { lstate.page += +b.dataset.pg; syncList(); }
-  else if (isCity(b.dataset.city) && lmap) { const v = CITY_VIEW[b.dataset.city]; lmap.closePopup(); lstate.hold = false; lstate.pick = lstate.city = b.dataset.city; lstate.auto = true; lmap.setView([v[0], v[1]], v[2], { animate: false }); lstate.auto = false; if (lstate.page) { lstate.page = 0; } syncList(); }
+  else if ((b.dataset.city === 'all' || isCity(b.dataset.city)) && lmap) {
+    lstate.only = b.dataset.city === 'all' ? null : b.dataset.city; lstate.page = 0; lstate.hold = false; lmap.closePopup(); syncDots();
+    const box = lstate.only && cityBox(lstate.only);
+    if (box) lmap.fitBounds(box, { animate: false, maxZoom: 14 });
+    syncList();
+    const again = document.querySelector('#city-go [aria-pressed="true"]'); if (again) again.focus();
+  }
   else if (b.dataset.save) toggleSave(b.dataset.save);
   else if (b.dataset.card) openListing(b.dataset.card);
   if (again) { let nb = null; try { nb = document.querySelector(again); } catch (err) {} if (nb && !nb.disabled && nb !== document.activeElement) nb.focus({ preventScroll: true }); }
