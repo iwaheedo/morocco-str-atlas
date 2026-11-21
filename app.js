@@ -438,7 +438,7 @@ function cleanListings(raw){
   const num = v => typeof v === 'number' && isFinite(v) ? v : null;
   const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : null;
   const day = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
-  const NUMS = ['lat', 'lng', 'bedrooms', 'beds', 'baths', 'guests', 'rating', 'reviews', 'adr', 'rev', 'potMonth', 'occ', 'since', 'availDays', 'bookedDays', 'calNights', 'calTaken', 'calOcc'];
+  const NUMS = ['lat', 'lng', 'bedrooms', 'beds', 'baths', 'guests', 'rating', 'reviews', 'adr', 'rev', 'potMonth', 'profitMonth', 'profitEst', 'occ', 'since', 'availDays', 'bookedDays', 'calNights', 'calTaken', 'calOcc'];
   const seen = Object.create(null), items = [];
   raw.items.forEach(l => {
     if (!l || typeof l !== 'object') return;
@@ -453,9 +453,17 @@ function cleanListings(raw){
   });
   if (!items.length) return null;
   const m = raw.meta && typeof raw.meta === 'object' ? raw.meta : {};
+  // The running-cost assumptions behind the profit figures: every one must be a sensible number, or none is used.
+  const costs = (() => {
+    const c = m.costs, o = { surface: {} };
+    if (!c || typeof c !== 'object' || !c.surface || typeof c.surface !== 'object') return null;
+    for (const k of ['platform', 'manager', 'upkeep', 'localTax', 'incomeTax', 'homeTax', 'utilities', 'internet', 'tv', 'insurance', 'syndicPerM2', 'fx']) { o[k] = num(c[k]); if (o[k] === null || o[k] < 0) return null; }
+    for (const k of ['0', '1', '2', '3', '4', '5', 'unknown']) { o.surface[k] = num(c.surface[k]); if (o.surface[k] === null || o.surface[k] < 0) return null; }
+    return o.fx > 0 && o.platform + o.manager + o.upkeep + o.localTax < 1 && o.homeTax <= 1 ? o : null;
+  })();
   return { items: items, meta: { source: m.source === 'airbnb' ? 'airbnb' : 'airroi', pulledAt: day(m.pulledAt),
     currency: ['GBP', 'MAD', 'EUR', 'USD'].indexOf(m.currency) >= 0 ? m.currency : 'MAD',
-    totalInMarket: num(m.totalInMarket), sort: str(m.sort, 40), calFrom: day(m.calFrom), calTo: day(m.calTo), calCount: num(m.calCount),
+    totalInMarket: num(m.totalInMarket), sort: str(m.sort, 40), calFrom: day(m.calFrom), calTo: day(m.calTo), calCount: num(m.calCount), costs: costs,
     cities: Object.keys(CITY_VIEW).reduce((acc, c) => { const v = m.cities && typeof m.cities === 'object' && m.cities[c] && typeof m.cities[c] === 'object' ? m.cities[c] : {};
       acc[c] = { openNights: num(v.openNights), topQuarterOcc: num(v.topQuarterOcc) }; return acc; }, {}) } };
 }
@@ -496,9 +504,22 @@ const kind = l => (isRoom(l) ? 'Private room' : 'Entire ' + (l.type ? l.type.toL
 const stars = l => l.rating ? '★ ' + (+l.rating).toFixed(2) + ' (' + nf0.format(l.reviews || 0) + ')' : l.isNew ? 'New' : 'No rating yet';
 const EST = AB ? ' <abbr title="An estimate, not a measurement. See the note under the list.">est.</abbr>' : '';
 // The five figures a card and a popup show, already formatted.
+// Take-home from a month of bookings, the way the deal desk works it out, with no mortgage: bookings less the
+// percentage costs and the fixed bills, then Moroccan income tax, then whatever UK tax is still due once that
+// Moroccan tax is credited. In the listings' own currency. Whole homes only: a room shares its bills.
+function takeHome(rev, l){
+  const c = LS.meta.costs; if (!c || rev == null || isRoom(l)) return null;
+  const m2 = c.surface[l.bedrooms == null ? 'unknown' : String(Math.min(l.bedrooms, 5))];
+  const fixed = (c.utilities + c.internet + c.tv + c.insurance + c.syndicPerM2 * m2) / c.fx;
+  const beforeTax = rev * (1 - c.platform - c.manager - c.upkeep - c.localTax) - fixed, incomeTax = rev * c.incomeTax;
+  const home = Math.max(0, c.homeTax * beforeTax - incomeTax);
+  return { fees: rev * (c.platform + c.manager), upkeep: rev * c.upkeep, fixed: fixed, maTax: rev * (c.localTax + c.incomeTax), home: home, net: beforeTax - incomeTax - home };
+}
+const lSigned = v => v == null ? '–' : v < 0 ? '−' + lMoney(-v) : lMoney(v);
 function figures(l){
   return {
     pot: l.potMonth != null ? lMoney(l.potMonth) : '–',
+    profit: lSigned(l.profitMonth), profitEst: lSigned(l.profitEst),
     open: AB ? (l.calNights != null && l.calTaken != null ? (l.calNights - l.calTaken) + ' of ' + l.calNights : '–') : (l.availDays != null ? nf0.format(l.availDays) : '–'),
     rev: l.rev != null ? lMoney(l.rev) : '–',
     occ: l.occ != null ? Math.round(l.occ) + '%' : '–',
@@ -512,18 +533,21 @@ function cardHtml(l){
   return `<article class="lcard" data-card="${esc(l.id)}" tabindex="0">` +
     `<header><span class="lc-kind">${esc(kind(l))}</span><span class="lc-stars">${esc(stars(l))}</span></header>` +
     `<p class="lc-name">${MULTI ? esc(l.city) + ' · ' : ''}${esc(l.name || 'Listing')}</p>` +
-    `<div class="lc-row two"><div class="m"><b>${f.pot}</b><span>Revenue potential, a month</span></div><div class="m"><b>${f.open}</b><span>${OPEN_LABEL}</span></div></div>` +
+    `<div class="lc-row two"><div class="m"><b>${f.pot}</b><span>Revenue potential, a month</span></div><div class="m"><b>${f.profit}</b><span>Potential profit, a month</span></div></div>` +
     `<div class="lc-row three"><div class="m key"><b>${f.rev}</b><span>Revenue, a year${EST}</span></div><div class="m key"><b>${f.occ}</b><span>Occupancy rate${EST}</span></div><div class="m key"><b>${f.adr}</b><span>Daily rate</span></div></div>` +
     (l.priceOdd ? '<p class="lc-why">The rate is far above others of its size in this city, so no revenue is worked out from it.</p>' : AB && l.occ == null ? '<p class="lc-why">Too few reviews to estimate revenue or occupancy.</p>' : '') +
+    (f.open !== '–' ? `<p class="lc-why">${OPEN_LABEL}: ${f.open}</p>` : '') +
     `<div class="lc-actions">${airbnbLink(l, 'btn')}<button type="button" class="btn ghost" data-save="${esc(l.id)}" aria-pressed="${!!saved[l.id]}">${saved[l.id] ? '♥ Saved' : '♡ Save'}</button></div></article>`;
 }
 function lPopup(l){
   const f = figures(l), since = l.since ? ' · listed ' + Math.floor(l.since) : '';
   const rows = [['Revenue, a year' + (AB ? ' (est.)' : ''), f.rev], ['Occupancy rate' + (AB ? ' (est.)' : ''), f.occ],
-    ['Daily rate', f.adr + (l.priceDate ? ' <span style="color:#52514e">on ' + shortDate(l.priceDate) + '</span>' : '')], ['Revenue potential, a month', f.pot], [OPEN_LABEL, f.open]];
+    ['Daily rate', f.adr + (l.priceDate ? ' <span style="color:#52514e">on ' + shortDate(l.priceDate) + '</span>' : '')], ['Revenue potential, a month', f.pot], ['Potential profit, a month', f.profit]].concat(l.profitEst != null ? [['Profit on its estimated bookings, a month', f.profitEst]] : [], [[OPEN_LABEL, f.open]]);
+  const t = takeHome(l.potMonth, l);
   const tags = [l.fav ? 'Guest favourite' : null, l.superhost ? 'Superhost' : null, l.exact === false ? 'approximate location' : null].filter(Boolean).join(' · ');
   return `<b>${esc(l.name || 'Listing')}</b><div class="r">${MULTI ? esc(l.city) + ' · ' : ''}${esc(kind(l))} · ${esc(stars(l))}${since}${tags ? ' · ' + tags : ''}</div><table>` +
     rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('') + '</table>' +
+    (t && l.profitMonth != null ? `<div class="r" style="margin:6px 0 0">Potential profit: ${lMoney(l.potMonth)} revenue − ${lMoney(t.fees)} Airbnb fee and manager − ${lMoney(t.upkeep)} upkeep − ${lMoney(t.fixed)} bills and service charge − ${lMoney(t.maTax)} Moroccan tax − ${lMoney(t.home)} UK tax. No mortgage.</div>` : '') +
     (l.cal && LS.meta.calFrom && LS.meta.calTo ? `<div class="calstrip" role="img" aria-label="Nights taken and free, ${shortDate(LS.meta.calFrom)} to ${shortDate(LS.meta.calTo)}">${l.cal.split('').map(ch => `<i class="${ch === 'a' ? '' : 't'}"></i>`).join('')}</div><div class="r" style="margin:3px 0 0">${shortDate(LS.meta.calFrom)} to ${shortDate(LS.meta.calTo)} · dark = taken</div>` : '') +
     airbnbLink(l, '');
 }
@@ -589,8 +613,14 @@ function syncList(){
     `<div class="ov"><div><span>Occupancy rate</span><b>${mo != null ? Math.round(mo) + '%' : '–'}</b><small>median${AB ? ', estimated' : ''}</small></div>` +
     `<div><span>Revenue</span><b>${lMoney(median(est.map(l => l.rev)))}</b><small>median a year${AB ? ', estimated' : ''}</small></div>` +
     `<div><span>Nightly rate</span><b>${lMoney(median(rows.map(l => l.adr)))}</b><small>median</small></div>` +
-    `<div><span>Active listings</span><b>${nf0.format(rows.length)}</b><small>in view</small></div></div>` +
+    `<div><span>Potential profit</span><b>${lSigned(median(rows.map(l => l.profitMonth)))}</b><small>median a month, after costs and tax</small></div></div>` +
     (mkt ? `<p class="note">Whole ${esc(mkt.name)} market, measured by AirROI: ${MK[mkt.name] ? MK[mkt.name].kpi.occupancy : mkt.occ}% occupancy, ${money(mkt.revenue)} average revenue a year, ${money(mkt.adr)} a night, ${nf0.format(mkt.listings)} listings.</p>` : '');
+}
+// How the profit figure is built, in words, from the same numbers the sums use.
+function profitMethod(){
+  const c = LS.meta.costs; if (!c) return '';
+  const pc = v => trim(v * 100, 1) + '%', bills = c.utilities + c.internet + c.tv + c.insurance;
+  return ` Potential profit, a month, is the revenue potential less the running costs the Morocco deal desk counts: Airbnb's fee (${pc(c.platform)}), a manager (${pc(c.manager)}), repairs and linen (${pc(c.upkeep)}), Moroccan local and income taxes (${pc(c.localTax + c.incomeTax)} together), bills for electricity and water, internet, TV and insurance (${money(bills)} a month) and the building's service charge (${money(c.syndicPerM2 * c.surface['2'])} a month for a two-bedroom home: Airbnb does not give floor area, so a typical size for the bedroom count is assumed), then UK tax at ${pc(c.homeTax)} of what is left, less the Moroccan income tax already paid. No mortgage and no buying costs. It is worked out for whole homes only, not single rooms.`;
 }
 function renderExplorer(){
   if (!lFresh()) return;
@@ -602,7 +632,7 @@ function renderExplorer(){
   $('#bed-filter').innerHTML = bedChips().map(b => `<button type="button" data-b="${b[0]}" aria-pressed="${b[0] === lstate.beds}">${b[1]}</button>`).join('');
   $('#llegend').innerHTML = $('#llegend-m').innerHTML = `<span class="box-label">Occupancy rate${AB ? ', estimated' : ''}</span>` + ['Under 25%', '25 to 50%', '50 to 75%', '75% and over'].map((t, i) => `<span><span class="sw" style="background:${BINCOL[i]}"></span>${t}</span>`).join('') + `<span><span class="sw" style="background:${GREY}"></span>No estimate</span>`;
   $('#listings-note').textContent = AB
-    ? `Revenue and occupancy are estimates, not measurements. Each listing is ranked within its city by how often it is reviewed for its age (the age comes from its Airbnb ID), then given the occupancy that AirROI's data for that city shows at that rank. Revenue, a year, is the daily rate × that occupancy × the nights a listing in that city is open on average (${CITIES.map(c => (LS.meta.cities[c].openNights || 243) + ' in ' + c).join(', ')}). Revenue potential, a month, is the daily rate × a month of nights at the occupancy the top quarter of that city's listings reach (${CITIES.map(c => (LS.meta.cities[c].topQuarterOcc || 62) + '% in ' + c).join(', ')}). The daily rate is the one-night price Airbnb showed in late November for the first night the listing had free, so it is a spot price; a rate more than four times the norm for its size and city (eight times, for a listing with ten or more reviews) is treated as a placeholder and no revenue is worked out from it. Listings with fewer than three reviews get no revenue or occupancy estimate.`
+    ? `Revenue and occupancy are estimates, not measurements. Each listing is ranked within its city by how often it is reviewed for its age (the age comes from its Airbnb ID), then given the occupancy that AirROI's data for that city shows at that rank. Revenue, a year, is the daily rate × that occupancy × the nights a listing in that city is open on average (${CITIES.map(c => (LS.meta.cities[c].openNights || 243) + ' in ' + c).join(', ')}). Revenue potential, a month, is the daily rate × a month of nights at the occupancy the top quarter of that city's listings reach (${CITIES.map(c => (LS.meta.cities[c].topQuarterOcc || 62) + '% in ' + c).join(', ')}). The daily rate is the one-night price Airbnb showed in late November for the first night the listing had free, so it is a spot price; a rate more than four times the norm for its size and city (eight times, for a listing with ten or more reviews) is treated as a placeholder and no revenue is worked out from it. Listings with fewer than three reviews get no revenue or occupancy estimate.${profitMethod()}`
     : 'Revenue, occupancy and rate cover the trailing twelve months, as measured by AirROI.';
   syncDots(); syncList();
 }
